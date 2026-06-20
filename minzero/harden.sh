@@ -76,6 +76,9 @@ done
 echo "/bin/false file size: "
 ls -lh /bin/false
 
+#stop cockpit
+systemctl stop cockpit.service
+systemctl stop cockpit.socket
 
 chattr +i /etc/passwd
 chattr +i /etc/shadow
