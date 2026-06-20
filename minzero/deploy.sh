@@ -41,20 +41,20 @@ deploy_host() {
 
 
   # Copy over files
-  sshpass -p "$OLDPASS" scp -ro StrictHostKeyChecking=no harden.sh "$PASSFILE" autofirewall.sh resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$USER@$IP:/tmp/"
+  sshpass -p "$OLDPASS" scp -ro StrictHostKeyChecking=no harden.sh "$PASSFILE" autofirewall.sh resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$USER@$IP:/var/tmp/"
 
   if [ $? -eq 0 ]; then
     printf "${COLOR}[$DIR]${NC} Files transferred successfully.\n"
 
     # firewall
     printf "${COLOR}[$DIR]${NC} starting autofirewall.sh\n"
-    sshpass -p "$OLDPASS" ssh "$USER"@"$IP" 'SUDO_ASKPASS="/tmp/'"$PASSFILE"'" sudo -A /tmp/autofirewall.sh' < /dev/null \
+    sshpass -p "$OLDPASS" ssh "$USER"@"$IP" 'SUDO_ASKPASS="/var/tmp/'"$PASSFILE"'" sudo -A /var/tmp/autofirewall.sh' < /dev/null \
       2>&1 | sed "s/^/[$DIR] /"
     printf "${COLOR}[$DIR]${NC} done autofirewall.sh\n"
     printf "${COLOR}[$DIR]${NC} starting harden.sh\n"
 
     # hardening
-    sshpass -p "$OLDPASS" ssh "$USER"@"$IP" "SUDO_ASKPASS=/tmp/$PASSFILE sudo -A /tmp/harden.sh '$HASH'" < /dev/null \
+    sshpass -p "$OLDPASS" ssh "$USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/harden.sh '$HASH'" < /dev/null \
       2>&1 | sed "s/^/[$DIR] /"
     printf "${COLOR}[$DIR]${NC} done harden.sh\n"
 

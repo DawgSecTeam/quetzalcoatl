@@ -79,4 +79,4 @@ ls -lh /bin/false
 
 chattr +i /etc/passwd
 chattr +i /etc/shadow
-shred /tmp/pass
+shred /var/tmp/pass
