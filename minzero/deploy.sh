@@ -17,7 +17,7 @@ chmod +x harden.sh
 chmod +x autofirewall.sh
 
 printf "${BLUE}=== Compressing resoures ===${NC}\n"
-tar -czvf resources.tar.gz ../activate.sh ../c2scanner.sh ../binaries/* ../sshd_config ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*
+tar -czvpf resources.tar.gz ../activate.sh ../c2scanner.sh ../binaries/* ../sshd_config ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*
 
 printf "${BLUE}=== Running deploy ===${NC}\n"
 deploy_host() {
@@ -41,7 +41,7 @@ deploy_host() {
 
 
   # Copy over files
-  sshpass -p "$OLDPASS" scp -ro StrictHostKeyChecking=no harden.sh "$PASSFILE" autofirewall.sh resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$D_USER@$IP:/tmp/"
+  sshpass -p "$OLDPASS" scp -rpo StrictHostKeyChecking=no harden.sh "$PASSFILE" autofirewall.sh resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$D_USER@$IP:/tmp/"
 
   if [ $? -eq 0 ]; then
     printf "${COLOR}[$DIR]${NC} Files transferred successfully.\n"

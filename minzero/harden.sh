@@ -9,8 +9,8 @@ fi
 
 # Backup important files before modification
 printf "Backing up passwd and shadow"
-cp /etc/passwd /etc/.passwd
-cp /etc/shadow /etc/.shadow
+cp -p /etc/passwd /etc/.passwd
+cp -p /etc/shadow /etc/.shadow
 printf " [DONE]\n"
 chattr -i /etc/passwd
 chattr -i /etc/shadow

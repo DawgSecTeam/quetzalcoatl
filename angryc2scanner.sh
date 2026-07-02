@@ -27,6 +27,10 @@ do
     echo "====== COMMITING MURDER ======"
     ss -tpn | grep -Po 'pid=\K[0-9]+' > hitlist
     while IFS= read -r line; do
+       # Leave important processes alone
+       #pname=$(ps -p "$line" -o comm=)
+       #incomplete
+
        ppid=$(ps --no-headers -fp "$line" | awk '$1 { print $3 }')
        kill -9 "$line"
        while [ "$ppid" != "$line" ] && [ "$ppid" != "1" ]; do

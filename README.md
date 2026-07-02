@@ -1,6 +1,9 @@
 # CyberDawgs Automation Suite
 Courtesy of Dipa and Hamza
 
+# UNTESTED SINCE COMMIT 32888256255156e30761ec6c5f0181993b59893e -- USE THAT VERSION FOR ALL COMPS
+Yeah I know it's not ideal but we'll set up versioned releases later
+
 ## Documentation
 For information on what the scripts do/how they work/when to use them, visit the docs:
 ```
@@ -25,6 +28,5 @@ And check out the README in the `minzero` directory.
 - Write fake shell to replace /bin/false (discord ping when used) or rbash
 - Windows scripting :(
 
-
 ## To-done
-- fixed many types and logic bugs across files
+- preserve file permissions in backup/activate
