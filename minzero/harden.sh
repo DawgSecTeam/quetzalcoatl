@@ -70,15 +70,11 @@ awk -F: '$3 < 1000 {print $1}' /etc/passwd | while read user; do
         continue
     fi
 
-    #sed -i "s/^\($user:\)\([^!]\)/\1!\2/" /etc/shadow
+    sed -i "s/^\($user:\)\([^!]\)/\1!\2/" /etc/shadow
 done
 
 echo "/bin/false file size: "
 ls -lh /bin/false
-
-#stop cockpit
-systemctl stop cockpit.service
-systemctl stop cockpit.socket
 
 chattr +i /etc/passwd
 chattr +i /etc/shadow

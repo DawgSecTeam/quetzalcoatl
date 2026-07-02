@@ -43,7 +43,7 @@ else
     # Openrc stuff
     rc-status --started --manual > $BACKUP_DIR/services-active_running.txt
     rc-update -v show            > $BACKUP_DIR/services-enabled_autostart.txt
-    rc-update show               > $BACKUP_DIR/services all_units.txt
+    rc-update show               > $BACKUP_DIR/services-all_units.txt
 fi
 
 ## Packages

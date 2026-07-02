@@ -5,4 +5,4 @@ if [ "$#" -eq 0 ]; then
 fi
 salt=$(openssl rand -hex 16)
 hashed_password=$(openssl passwd -6 -salt "$salt" "$1")
-printf "$hashed_password"
+printf "%s" "$hashed_password"

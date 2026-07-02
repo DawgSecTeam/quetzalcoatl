@@ -3,7 +3,7 @@
 # Maybe later compare binary sizes
 
 # Ensure running as root
-if [ "$EUID" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
     printf "This script requires root privileges."
     exit 1
 fi

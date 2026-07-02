@@ -21,6 +21,7 @@ mkdir -p "$BACKUP_DIR"
 echo "Backup dir created"
 LOG_DIR="/var/log/.wd/"
 mkdir -p "$LOG_DIR"
+touch "$LOG_DIR/wd.log"
 chattr +a /var/log/.wd/
 
 

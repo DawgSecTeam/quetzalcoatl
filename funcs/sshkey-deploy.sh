@@ -1,3 +1,4 @@
+#!/bin/bash
 # Old, was used for ansible
 # format input like this: user1,ip1,pass1, user2,ip2,pass2
 

@@ -28,7 +28,7 @@ deploy_host() {
   line="$1"
   DIR=$(echo "$line" | cut -d' ' -f1)
   IP=$(echo "$line" | cut -d' ' -f2)
-  USER=$(echo "$line" | cut -d' ' -f3)
+  D_USER=$(echo "$line" | cut -d' ' -f3)
   OLDPASS=$(echo "$line" | cut -d' ' -f4)
   HASH=$(echo "$line" | cut -d' ' -f5)
 
@@ -36,25 +36,25 @@ deploy_host() {
   printf '#!/bin/sh\nprintf "%s\n" "%s"\n' "$OLDPASS" > "$PASSFILE"
   chmod +x "$PASSFILE"
 
-  printf "${COLOR}[$DIR]${NC} Begin system $IP with user $USER\n"
+  printf "${COLOR}[$DIR]${NC} Begin system $IP with user $D_USER\n"
   AbsPath=$(realpath ../systems/)
 
 
   # Copy over files
-  sshpass -p "$OLDPASS" scp -ro StrictHostKeyChecking=no harden.sh "$PASSFILE" autofirewall.sh resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$USER@$IP:/tmp/"
+  sshpass -p "$OLDPASS" scp -ro StrictHostKeyChecking=no harden.sh "$PASSFILE" autofirewall.sh resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$D_USER@$IP:/tmp/"
 
   if [ $? -eq 0 ]; then
     printf "${COLOR}[$DIR]${NC} Files transferred successfully.\n"
 
     # firewall
     printf "${COLOR}[$DIR]${NC} starting autofirewall.sh\n"
-    sshpass -p "$OLDPASS" ssh "$USER"@"$IP" 'SUDO_ASKPASS="/tmp/'"$PASSFILE"'" sudo -A /tmp/autofirewall.sh' < /dev/null \
+    sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" 'SUDO_ASKPASS="/tmp/'"$PASSFILE"'" sudo -A /tmp/autofirewall.sh' < /dev/null \
       2>&1 | sed "s/^/[$DIR] /"
     printf "${COLOR}[$DIR]${NC} done autofirewall.sh\n"
     printf "${COLOR}[$DIR]${NC} starting harden.sh\n"
 
     # hardening
-    sshpass -p "$OLDPASS" ssh "$USER"@"$IP" "SUDO_ASKPASS=/tmp/$PASSFILE sudo -A /tmp/harden.sh '$HASH'" < /dev/null \
+    sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/tmp/$PASSFILE sudo -A /tmp/harden.sh '$HASH'" < /dev/null \
       2>&1 | sed "s/^/[$DIR] /"
     printf "${COLOR}[$DIR]${NC} done harden.sh\n"
 
@@ -68,7 +68,7 @@ deploy_host() {
 
 export RED GREEN BLUE YELLOW LIGHT_MAGENTA LG NC
 export -f deploy_host
-export USER OLDPASS
+export D_USER OLDPASS
 
 parallel -j 10 --line-buffer deploy_host :::: hostfile
 

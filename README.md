@@ -1,15 +1,10 @@
 # CyberDawgs Automation Suite
 Courtesy of Dipa and Hamza
 
-## Vagrant
-We're using Vagrant for spinning up test environments to quickly test scripts across multiple distros; there are more setup details in the `testing` directory.
-
 ## Documentation
 For information on what the scripts do/how they work/when to use them, visit the docs:
 ```
-https://docs.dawgsec.com
-User: team
-Password: cyberdawgs4eva
+https://wiki.dawgsec.com
 ```
 And check out the README in the `minzero` directory.
 
@@ -21,7 +16,6 @@ And check out the README in the `minzero` directory.
 - Dynamic auditd rule installtion script for watching binaries based on specific paths on different distros
 - deploy runs backup and sends back to system executed from
 - ensure busybox deploy actually works
-- deploy auditd-notifier in activate
 - in-place deploy (try localhost on deploy)
 - jumpstart script curled into shell that installs packages and pulls repo + runs deploy
 - Toggle outgoing on and off for package installs in activate
@@ -33,4 +27,4 @@ And check out the README in the `minzero` directory.
 
 
 ## To-done
-- pipe baseline specific to less
+- fixed many types and logic bugs across files

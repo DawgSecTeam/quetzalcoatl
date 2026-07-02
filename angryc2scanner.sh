@@ -2,6 +2,11 @@
 # Like c2scanner but ANGRY
 # It will murder (in cold blood!) any process attempting to reach out to the world
 
+if [ "$(id -u)" -ne 0 ]; then
+  printf "How are you going to commit murder as anything other than root? Exiting\n"
+  exit 1
+fi
+
 mkdir -p scans
 
 FNAME="$(date +%s)"
@@ -23,11 +28,11 @@ do
     ss -tpn | grep -Po 'pid=\K[0-9]+' > hitlist
     while IFS= read -r line; do
        ppid=$(ps --no-headers -fp "$line" | awk '$1 { print $3 }')
-       sudo kill -9 "$line"
+       kill -9 "$line"
        while [ "$ppid" != "$line" ] && [ "$ppid" != "1" ]; do
          prev=$ppid
          ppid=$(ps --no-headers -fp "$prev" | awk '$1 { print $3 }')
-         kill -9 prev;
+         kill -9 "$prev";
          echo "done murding $prev"
          done
        echo "done murding $line"

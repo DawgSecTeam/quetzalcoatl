@@ -1,5 +1,6 @@
 #!/bin/sh
 # When auditd rules are triggered, sends a discord notification
+# Uses flags exclusive to GNU grep!!
 
 # Configuration
 SOCKET_PATH="/var/run/audispd_events"
@@ -36,7 +37,7 @@ nc -U "$SOCKET_PATH" | while read -r line; do
 	    echo "$PID"
 
             echo "--- ALERT TRIGGERED ---"
-	    curl -H "Content-Type: application/json" -d '{"embeds":[{"title":"'$ALERT_KEY1'","fields":[{"name":"COMM","value":"'$COMM'"},{"name":"PID","value":"'$PID'"},{"name":"PPID","value":"'$PPID'"},{"name":"UID","value":"'$UID'"}]}]}' "$webook" 
+	    curl -H "Content-Type: application/json" -d '{"embeds":[{"title":"'$ALERT_KEY2'","fields":[{"name":"COMM","value":"'$COMM'"},{"name":"PID","value":"'$PID'"},{"name":"PPID","value":"'$PPID'"},{"name":"UID","value":"'$UID'"}]}]}' "$webhook" 
 	    echo "$line"
             ;;
     esac

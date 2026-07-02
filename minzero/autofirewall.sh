@@ -71,8 +71,8 @@ iptables -A OUTPUT -m conntrack --ctstate INVALID -j DROP
 
 
 # Allow vertical
-sudo iptables -A INPUT -s 192.168.111.0/24 -j ACCEPT
-sudo iptables -A OUTPUT -s 192.168.111.0/24 -j ACCEPT
+iptables -A INPUT -s 192.168.111.0/24 -j ACCEPT
+iptables -A OUTPUT -s 192.168.111.0/24 -j ACCEPT
 
 #v6
 sysctl -w net.ipv6.conf.all.disable_ipv6=1

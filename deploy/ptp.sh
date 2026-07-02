@@ -9,7 +9,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-CONF_FILE="/etc/linuxptp/ptp4l.conf"
+PTP_CONFIG_FILE="/etc/linuxptp/ptp4l.conf"
 PTP_INTERFACE=$(ip route get 8.8.8.8 | grep -Po '(?<=dev )(\S+)' | head -1)
 
 systemctl disable --now chronyd
