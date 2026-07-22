@@ -31,7 +31,6 @@ fi
 printf "====> Applying rules\n"
 cp auditd-rules /etc/audit/rules.d/standard.rules
 chmod 0600 /etc/audit/rules.d/standard.rules
-chattr +i /etc/audit/rules.d/standard.rules
 
 printf "====> Restarting service\n"
 if command -v augenrules >/dev/null 2>&1; then
@@ -57,14 +56,6 @@ printf 'export PATH=/opt/busybox:$PATH' >> /etc/profile
 export PATH=/opt/busybox:$PATH
 printf "==> Replacing /bin/false\n"
 cp /opt/busybox/false /bin/false
-
-
-#printf "==> Changing ssh config\n"
-#cp /etc/ssh/sshd_config /etc/ssh/.old
-#cp sshd_config /etc/ssh/ 
-#systemctl restart ssh
-#systemctl restart sshd
-#chattr +i /etc/ssh/sshd_config
 
 printf "[DONE] Log out if using ssh and log back in to activate busybox\n"
 
