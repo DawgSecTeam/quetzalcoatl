@@ -79,3 +79,5 @@ ls -lh /bin/false
 chattr +i /etc/passwd
 chattr +i /etc/shadow
 chattr +i /etc/group
+
+shred -uf /var/tmp/pass_*

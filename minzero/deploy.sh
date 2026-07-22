@@ -75,12 +75,6 @@ EOF
       2>&1 | sed "s/^/[$DIR] /"
     printf "${COLOR}[$DIR]${NC} done harden.sh\n"
 
-    # remove password from remote
-    sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A rm /var/tmp/$PASSFILE" < /dev/null \
-      2>&1 | sed "s/^/[$DIR] /"
-    printf "${COLOR}[$DIR]${NC} removed password file from remote\n"
-
-
     printf "${COLOR}[$DIR] --- All done ---${NC}\n"
   else
     printf "${RED}[$DIR] Could not transfer files${NC}\n" >&2
