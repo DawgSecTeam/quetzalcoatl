@@ -192,14 +192,13 @@ printf "${BLUE}Checking for executables and scripts in /etc and /var${NC}\n"
 sudo find /etc -type f -exec file {} + | grep "ELF"
 sudo find /var -type f -exec file {} + | grep "ELF"
 grep -rIl "^#!" /etc
-grep -rIl "^#!" /etc
 
 interact
 
 printf "${BLUE}Would you like to install lynis? (y/n)${NC}\n"
 read INSTALL_LYNIS
 if [ $INSTALL_LYNIS = "y" ]; then
-   printf "${BLUE}Starting lynis, redirecting output to /tmp/lynis${NC}\n"
+   printf "${BLUE}Starting lynis, redirecting output to /var/tmp/lynis${NC}\n"
    if command -v dnf > /dev/null 2>&1; then
       sudo dnf install lynis -y
    elif command -v apt > /dev/null 2>&1; then
@@ -207,15 +206,15 @@ if [ $INSTALL_LYNIS = "y" ]; then
    elif command -v apk > /dev/null 2>&1; then
       sudo apk install lynis
    fi
-   nohup lynis audit system > /tmp/lynis 2>&1 &
+   nohup lynis audit system > /var/tmp/lynis 2>&1 &
 fi
 
 interact
 
-printf "${BLUE}Starting linpeas, redircting output to /tmp/linpeas, output can be read with less -r${NC}\n"
-#curl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh -o /tmp/lp.sh
-chmod +x /tmp/binaries/linpeas.sh
-nohup /tmp/binaries/linpeas.sh > /tmp/linpeas 2>&1 &
+printf "${BLUE}Starting linpeas, redircting output to /var/tmp/linpeas, output can be read with less -r${NC}\n"
+#curl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh -o /var/tmp/lp.sh
+chmod +x /var/tmp/binaries/linpeas.sh
+nohup /var/tmp/binaries/linpeas.sh > /var/tmp/linpeas 2>&1 &
 
 interact
 

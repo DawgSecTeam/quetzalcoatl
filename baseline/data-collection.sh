@@ -9,7 +9,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Create backup dirs
-BACKUP_DIR=/tmp/snapshot
+BACKUP_DIR=/var/tmp/snapshot
 
 mkdir -p $BACKUP_DIR/filesystem/etc
 mkdir -p $BACKUP_DIR/filesystem/root
@@ -65,5 +65,5 @@ find / -perm -u=s -type f 2>/dev/null > $BACKUP_DIR/suidbits
 
 ## Pack files
 printf "==> Archiving directory...\n"
-tar -cpzf /tmp/baseline.tar.gz $BACKUP_DIR
+tar -cpzf /var/tmp/baseline.tar.gz $BACKUP_DIR
 printf "==> Done.\n"

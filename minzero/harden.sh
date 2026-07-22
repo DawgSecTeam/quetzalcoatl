@@ -29,7 +29,7 @@ rm -rf /home/bluey/*
 rm -rf /home/bluey/.*
 printf "Cleaned up home directory\n"
 
-if getent group wheel >/dev/null; then 
+if getent group wheel >/dev/null; then
    usermod -aG wheel bluey
    addgroup bluey wheel
    if command -v apk > /dev/null; then
@@ -49,7 +49,7 @@ printf "Received: %s\n" "$hashed"
 
 sed -i "s|^bluey:[^:]*|bluey:$hashed|" /etc/shadow
 chmod 644 /etc/passwd
-chmod 600 /etc/shadow 
+chmod 600 /etc/shadow
 
 # List of users to keep unlocked
 ALLOWED_USERS="nobody bluey"
@@ -78,4 +78,4 @@ ls -lh /bin/false
 
 chattr +i /etc/passwd
 chattr +i /etc/shadow
-shred /var/tmp/pass
+chattr +i /etc/group

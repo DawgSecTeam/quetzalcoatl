@@ -82,9 +82,3 @@ backup() {
 printf "Welcome to the backup toolkit, choose an option:\n [1] Create new backup \n [2] Restore backup \n [3] Exit\n"
 # should handle each one, update backup to rely on a name variable
 # either have it create an automatic backup when first run, or allow passing a flag to create a named backup, and use it in activate
-
-
-# for activate, integrate much of the functionality into deploy's automatic run
-
-
-# all scripts should create log files in a shared log directory, be run with tee from deploy

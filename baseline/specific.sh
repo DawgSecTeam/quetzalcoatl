@@ -28,8 +28,8 @@ chmod +x data-collection.sh
 ./data-collection.sh
 
 printf "${BLUE}==> Decompressing files${NC}\n"
-tar -xpzf /tmp/*/baseline.tar.gz -C /tmp/sys-clean
-tar -xpzf /tmp/baseline.tar.gz -C /tmp/sys-dirty
+tar -xpzf /var/tmp/*/baseline.tar.gz -C /var/tmp/sys-clean
+tar -xpzf /var/tmp/baseline.tar.gz -C /var/tmp/sys-dirty
 
 CLEAN=$(realpath ../sys-clean)
 DIRTY=$(realpath ../sys-dirty)
@@ -53,7 +53,7 @@ interact
 printf "${BLUE}Showing installed packages${NC}\n"
 diff -y $CLEAN/packages $DIRTY/packages | less
 
-interact 
+interact
 
 printf "${BLUE}Showing suid bits${NC}\n"
 diff -y $CLEAN/suidbits $DIRTY/suidbits | less

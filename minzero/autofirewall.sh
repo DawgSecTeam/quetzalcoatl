@@ -2,8 +2,14 @@
 set -e
 echo "[*] Applying hardened firewall rules..."
 
+if ! command -v iptables > /dev/null; then
+ if command -v apt > /dev/null; then
+	apt install -y iptables
+ fi
+fi
+
 if command -v apk > /dev/null; then
- apk add iptables
+ apk add -q iptables
  rc-update add iptables
  rc-service iptables save
 fi
@@ -29,8 +35,8 @@ iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 # --------------------------------------------------
 # Allow inbound traffic ONLY to listening TCP ports
 # --------------------------------------------------
-IN=$(head -n1 /tmp/port-sources)
-OUT=$(tail -n1 /tmp/port-sources)
+IN=$(head -n1 /var/tmp/port-sources)
+OUT=$(tail -n1 /var/tmp/port-sources)
 
 #INBOUND
 for port in $IN; do

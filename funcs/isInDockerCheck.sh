@@ -1,2 +1,6 @@
 # Check if running in Docker
-awk -F/ '$2 == "docker"' /proc/self/cgroup | read
+if [ -f /.dockerenv ]; then
+    echo "Running in Docker"
+else
+    echo "Not running in Docker"
+fi

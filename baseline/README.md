@@ -6,6 +6,5 @@
 
 **On the compromised system**
 - ensure deploy was ran
-- run /tmp/activate.sh
-- run /tmp/standard.sh
-- run /tmp/specific.sh
+- run /var/tmp/standard.sh
+- run /var/tmp/specific.sh

@@ -33,6 +33,7 @@ do
 
        ppid=$(ps --no-headers -fp "$line" | awk '$1 { print $3 }')
        kill -9 "$line"
+       # this could loop maybe, be more careful
        while [ "$ppid" != "$line" ] && [ "$ppid" != "1" ]; do
          prev=$ppid
          ppid=$(ps --no-headers -fp "$prev" | awk '$1 { print $3 }')
