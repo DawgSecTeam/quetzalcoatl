@@ -13,8 +13,9 @@ cd /var/tmp
 # Taking initial backup
 ############################
 printf "==> Deploying backup\n"
+printf "IMPORTANT NOTE -- OUTPUT OF ps, ss, AND cp WILL BE DIFFERENT AFTER BUSYBOX IS CONFIGURED\n"
 chmod +x backup.sh
-./backup.sh | tee -a /var/tmp/.log/backup.log
+./backup.sh backup initial
 
 ############################
 # Setting up auditd
@@ -61,7 +62,7 @@ nohup /etc/kernel/watchdawg /etc/kernel/init-state /etc/kernel/sources > /etc/ke
 printf "==> Deploying busybox\n"
 #curl -k -L -O https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox
 chmod +x /var/tmp/binaries/busybox
-mkdir /opt/busybox
+mkdir -p /opt/busybox
 cp -p /var/tmp/binaries/busybox /opt/busybox/
 /opt/busybox/busybox --install -s /opt/busybox
 printf 'export PATH=/opt/busybox:$PATH' >> /etc/profile
