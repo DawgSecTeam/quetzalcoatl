@@ -68,7 +68,7 @@ cp -p /var/tmp/binaries/busybox /opt/busybox/
 printf 'export PATH=/opt/busybox:$PATH' >> /etc/profile
 export PATH=/opt/busybox:$PATH
 printf "==> Replacing /bin/false\n"
-cp -p /opt/busybox/false /bin/false
+ln -sf /opt/busybox/false /bin/false
 
 printf "[DONE] Log out if using ssh and log back in to activate busybox\n"
 
