@@ -48,3 +48,12 @@ do
 
   sleep .5
 done
+
+
+
+
+## issues
+##########
+# **angryc2scanner**
+# - the parent-chain kill loop (line 37) has no guard for an empty `$ppid`. If `ps` returns nothing (process already dead, or PID doesn't exist) then `prev=""` and the loop spins forever running `kill -9 ""`. Needs `[ -n "$ppid" ]` in the while condition and a `[ -z "$ppid" ] && break` inside
+# - `awk '$1 { print $3 }'` uses field 1 as a truthiness test, so a numeric UID of `0` (which `ps -f` prints when the username is too long) is treated as false and prints nothing, hitting the same empty-`$ppid` path. Use `awk 'NR==1 { print $3 }'`

@@ -8,7 +8,7 @@
 
 # Ensure running as root
 if [ "$(id -u)" -ne 0 ]; then
-    echo "[ERROR] This script must be run as root or with sudo."
+    echo "[ERROR] This script must be run as root."
     exit 1
 fi
 
@@ -98,15 +98,15 @@ backup() {
     # Alpine
     if [ -x "$(command -v apk)" ];
     then
-        apk info > $BACKUP_DIR/$SNAPSHOT/packages-alpine.txt
+        apk info > $BACKUP_DIR/$SNAPSHOT/packages.txt
     # Debian
     elif [ -x "$(command -v apt)" ];
     then
-        dpkg -l > $BACKUP_DIR/$SNAPSHOT/packages-debian.txt
+        dpkg -l > $BACKUP_DIR/$SNAPSHOT/packages.txt
     # RHEL
     elif [ -x "$(command -v dnf)" ];
     then
-        rpm -qa > $BACKUP_DIR/$SNAPSHOT/packages-rhel.txt
+        rpm -qa > $BACKUP_DIR/$SNAPSHOT/packages.txt
     else
         printf "== Unknown package manager ==\n"
     fi
@@ -124,6 +124,12 @@ backup() {
 
     ## Kernel modules
     lsmod > $BACKUP_DIR/$SNAPSHOT/kernelmodules.txt
+
+    # Extended fields, only needed for baseline clean/dirty comparisons
+    if [ "$EXTENDED" = "1" ]; then
+        find / -xdev -perm -u=s -type f 2>/dev/null > "$BACKUP_DIR/$SNAPSHOT/suidbits.txt"
+        env > "$BACKUP_DIR/$SNAPSHOT/environmentalvariables.txt"
+    fi
 
     # Date snapshot was completed
     date > "$BACKUP_DIR/$SNAPSHOT/date_taken"
@@ -194,6 +200,12 @@ elif [ "$1" = "restore" ]; then
         SNAPSHOT=$2
         restore 2>&1 | tee -a /var/tmp/.log/backup.log
     fi
+elif [ "$1" = "baseline" ]; then
+    SNAPSHOT="baseline"
+    EXTENDED=1
+    rm -rf "$BACKUP_DIR/$SNAPSHOT"
+    backup 2>&1 | tee -a /var/tmp/.log/backup.log
+    cp "$BACKUP_DIR/archives/$SNAPSHOT.tar.gz" /var/tmp/baseline.tar.gz
 # script was run manually
 else
     printf "Welcome to the backup toolkit, choose an option:\n [1] Create new backup \n [2] Restore backup \n [3] Exit\n" >&2

@@ -20,7 +20,7 @@ sed -ri 's@(:[^:]*$)@:/bin/false@' /etc/passwd
 
 # Add blueteam user
 if command -v apk > /dev/null; then
-   adduser bluey -h /home/bluey -s /bin/sh
+   adduser -D bluey -h /home/bluey -s /bin/sh
 else
    useradd bluey -m -s /bin/sh
 fi

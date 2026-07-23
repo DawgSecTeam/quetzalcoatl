@@ -75,3 +75,13 @@ done
 # v1.0.0 -> watch files and output changes to log
 # v1.1.0 -> add support for watching directories
 # v1.1.1 -> mark only .wd dir as append only instead of /var/log
+
+
+
+
+
+## watchdawg
+##############
+# **watchdawg**
+# - `watchdawg.sh:40` appends into `$INPUT` while the enclosing loop is still reading it (`:52 done < "$INPUT"`). Terminates on a normal tree but spins forever on a symlink cycle, and it permanently rewrites the deployed `/etc/kernel/sources` so every restart re-expands a longer list. An empty directory also appends a literal `path/*` entry. Expand into a separate watchlist file under `$BACKUP_DIR` and leave the sources file alone — `find "$line" -type f` replaces the manual recursion
+# - `watchdawg-sources:12-13` duplicate `/etc/pam.d` and `/etc/ssh` from lines 7-8

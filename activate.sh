@@ -10,6 +10,14 @@ printf "Starting activation script...\n"
 cd /var/tmp
 
 ############################
+# Creating directories
+############################
+
+# Logging
+mkdir -p /var/tmp/.log
+chmod 777 /var/tmp/.log
+
+############################
 # Taking initial backup
 ############################
 printf "==> Deploying backup\n"
@@ -72,19 +80,22 @@ ln -sf /opt/busybox/false /bin/false
 
 printf "[DONE] Log out if using ssh and log back in to activate busybox\n"
 
-############################
-# Setting up Splunk forwarder
-############################
-# if [ "$DEPLOY_SPLUNK" = "yes" ]; then
-#    printf "==> Deploying splunk\n"
-#    addgroup splunk
-#    groupadd splunk
-#    adduser splunk # busybox + gnu
-#    usermod -aG splunk splunk
-#    addgroup splunk splunk
 
-#    # ADD THE REST
-# fi
+############################
+# Running autofirewall.sh
+############################
+
+printf "Starting autofirewall.sh\n"
+/var/tmp/autofirewall.sh 2>&1 | tee /var/tmp/.log/autofirewall.log
+printf "Finished autofirewall.sh\n"
+
+############################
+# Running harden.sh
+############################
+
+printf "Starting harden.sh\n"
+/var/tmp/harden.sh "$1" 2>&1 | tee /var/tmp/.log/harden.log
+printf "Finished harden.sh\n"
 
 printf "Finished activation script\n"
 printf "Check out the baselining scripts standard.sh and specific.sh\n"

@@ -1,59 +1,55 @@
 # DawgSec Automation Suite
 Courtesy of Dipa and Hamza
 
-## Documentation
-For information on what the scripts do/how they work/when to use them, read the code or ask an LLM.
-More deploy documentation in the `baseline`, `minzero`, and `systems` directory READMEs.
-Basic implementation guide in PIPELINE.md (will be moved here).
-
 ## Official policy: changes and competitions
 **Changes:** When making changes, make them on a new branch. To merge the changes, they first all need to be tested. Commits on an unmerged branch are allowed to break functionality, as long as everything is fixed by the time a PR is made.
 
 **Competitions:** When adding anything to the systems/ directory for a specific competition, clone the repository, so nothing in the main repo is modified. Everything in that directory is currently .gitignored, as is minzero/hostfile, so you will need to modify the gitignore
 
+
+
 ## Before we Merge
 For this specific reworking of the scripts, we have some major changes to finish:
 
-**backup**
-- Backup will add restore and snapshot functionalities
-- merge data-collection and backup scripts
-   - either into one file with path choices or just have backup use data-collection
-**logs**
-- all scripts should create log files in a shared log directory, be run with tee from deploy: /var/tmp/.log/
+- **sudo reliance** delpoy currently relies on remotes having sudo, remove dependancy
+
+- **watchdawg** ai found issues, resolve them
+- **angryc2scanner** ai found issues, resolve them or push back
 
 
-- we're going to merge harden and activate, then have autofirewall be deployed by activate. meeting to discuss this web 22
-- deploy currently relies on remotes having sudo, fix this
-- make sure pass_* is deleted on the remote after deploy
+## Documentation
+For information on what the scripts do/how they work/when to use them, read the code or ask an LLM.  
+More deploy documentation in the `baseline`, `minzero`, and `systems` directory READMEs.  
 
+## Usage
+```
+ Stage 0 (clean box)      Stage 1-2 (operator host)          Stage 3 (each target, root)
+ ┌────────────────┐       ┌────────────────────────┐         ┌──────────────────────────┐
+ │ backup.sh      │       │ hostfile + port-sources│  ssh    │ baseline/standard.sh     │
+ │ baseline       │──┐    │        │               │ ──────► │ baseline/specific.sh     │
+ │ → baseline.    │  │    │        ▼               │ sshpass │                          │
+ │   tar.gz       │  └───►│ minzero/deploy.sh      │ +parallel                          │
+ └────────────────┘ (copy │        │               │         │                          │
+  clean snapshot into     │        ▼               │         │                          │
+  systems/<name>/)        │  activate.sh           │         │                          │
+                          │  ├ autofirewall.sh     │         │                          │
+                          │  └ harden.sh           │         │                          │
+                          └────────────────────────┘         └──────────────────────────┘
+```
 
-*Currenty broken:* both baselines, backup
+### Stage 0 — Clean snapshot [Docs: baseline/README.md]
+0.1 Install the scored services on a clean box to mirror the target  
+0.2 Run `backup.sh baseline`  
+0.3 Copy that `baseline.tar.gz` into each `systems/<name>/`
 
+### Stage 1 — Operator prep [Docs: minzero/README.md]
+1.1 Create the hostfile  
+1.2 Write the `systems/port-sources` file to allow only expected ports
 
+### Stage 2 — Deploy [Docs: minzero/README.md]
+2.1 Run `minzero/deploy.sh` which reads `./hostfile`, and for each host copies over
+   `port-sources` and `systems/<name>/`
 
-AI found issues:
-
-**baseline paths**
-- `specific.sh:34-35` still uses `realpath ../sys-clean`, which resolves against the cwd instead of /var/tmp. Since data-collection tars an absolute path, the real roots after extraction are `/var/tmp/sys-{clean,dirty}/var/tmp/snapshot`
-- `specific.sh` never creates /var/tmp/sys-clean and /var/tmp/sys-dirty, so the `tar -C` calls fail outright on a fresh box. Needs an `rm -rf` + `mkdir -p` before extracting
-- backup.sh is still on the old paths: `/var/bk` (line 11) and `~/bk.tar.gz` (line 77). Should move to /var/tmp with the rest
-- backup.sh's output filenames (`kernelmodules.txt`, `listeningports.txt`, `packages-debian.txt`) don't match what specific.sh diffs (`kernelModules`, `openPorts`, `packages`), so its tarball can't serve as a clean baseline. Resolved if we do the backup/data-collection merge above
-- note: the `filesystem/` prefix in the diff commands is correct now that both sides come from data-collection. Don't strip it
-
-**watchdawg**
-- `watchdawg.sh:40` appends into `$INPUT` while the enclosing loop is still reading it (`:52 done < "$INPUT"`). Terminates on a normal tree but spins forever on a symlink cycle, and it permanently rewrites the deployed `/etc/kernel/sources` so every restart re-expands a longer list. An empty directory also appends a literal `path/*` entry. Expand into a separate watchlist file under `$BACKUP_DIR` and leave the sources file alone — `find "$line" -type f` replaces the manual recursion
-- `watchdawg-sources:12-13` duplicate `/etc/pam.d` and `/etc/ssh` from lines 7-8
-
-**backup**
-- `backup()` is defined at `backup.sh:27-78` but never called. The script writes `sources.txt`, prints the menu at `:82`, and exits — so `activate.sh:17` takes no backup at all. This is the "backup is broken" note above; the selection logic in the `:83-84` TODOs is what's missing. Whatever we land needs a non-interactive path, since deploy runs it over `ssh ... < /dev/null`
-- `backup.sh:31` — `cp -pr "${src}/*" "$dest/"` quotes the glob so it never expands. Copies would fail even once `backup()` is wired up. Use `"${src}/."`
-- `$BACKUP_DIR` is unquoted in 16 places (`:13,35,36,40-42,45-47,54,58,62,68-70,73,77`)
-- `pstree`, `nft`, `iptables`, and `rc-status` are called unconditionally (`:36,45-47,69,70`) while the package managers get `command -v` guards at `:52-62`. Missing tools write empty files and dump errors into the log
-
-**angryc2scanner**
-- the parent-chain kill loop (line 37) has no guard for an empty `$ppid`. If `ps` returns nothing (process already dead, or PID doesn't exist) then `prev=""` and the loop spins forever running `kill -9 ""`. Needs `[ -n "$ppid" ]` in the while condition and a `[ -z "$ppid" ] && break` inside
-- `awk '$1 { print $3 }'` uses field 1 as a truthiness test, so a numeric UID of `0` (which `ps -f` prints when the username is too long) is treated as false and prints nothing, hitting the same empty-`$ppid` path. Use `awk 'NR==1 { print $3 }'`
-
-**c2scanner / angryc2scanner**
-- `c2scanner.sh:7` and `angryc2scanner.sh:13` seed `FNAME_LAST` to `"$(date +%s)ProMax"`, a file that never exists, so the first `diff` errors to stderr. Harmless (exit 2 → empty `$DIFF` → no false alert) but it should take a real first snapshot before entering the loop
-- neither prunes `scans/`, which grows by two files per second for as long as the scanner runs
+### Stage 3 — Baseline [Docs: baseline/README.md]
+3.1 Run `baseline/standard.sh` and `baseline/specific.sh` which provide info on the
+   state of the compromised system

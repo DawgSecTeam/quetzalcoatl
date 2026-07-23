@@ -1,28 +1,10 @@
 #!/bin/sh
-printf "▗▄▄▖  ▗▄▖  ▗▄▄▖▗▄▄▄▖▗▖   ▗▄▄▄▖▗▖  ▗▖▗▄▄▄▖     ▗▄▄▖▗▄▄▄▖▗▄▖ ▗▖  ▗▖▗▄▄▄  ▗▄▖ ▗▄▄▖ ▗▄▄▄ \n";
-printf "▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌   ▐▌     █  ▐▛▚▖▐▌▐▌       ▐▌     █ ▐▌ ▐▌▐▛▚▖▐▌▐▌  █▐▌ ▐▌▐▌ ▐▌▐▌  █\n";
-printf "▐▛▀▚▖▐▛▀▜▌ ▝▀▚▖▐▛▀▀▘▐▌     █  ▐▌ ▝▜▌▐▛▀▀▘     ▝▀▚▖  █ ▐▛▀▜▌▐▌ ▝▜▌▐▌  █▐▛▀▜▌▐▛▀▚▖▐▌  █\n";
-printf "▐▙▄▞▘▐▌ ▐▌▗▄▄▞▘▐▙▄▄▖▐▙▄▄▖▗▄█▄▖▐▌  ▐▌▐▙▄▄▖    ▗▄▄▞▘  █ ▐▌ ▐▌▐▌  ▐▌▐▙▄▄▀▐▌ ▐▌▐▌ ▐▌▐▙▄▄▀\n\n";
-printf " ====================================================================== v0.1.1 ===== \n\n";
-
-# v0.1.1 - add interactions between checks
-#        - remove duplicate cron checks
-#        - show repos
-#        - remove duplicate ld_preload check
-#        - fix a ton of syntax errors in shell and curl
 
 # Check if running as root
 if [ "$(id -u)" != "0" ]; then
     echo -e "\e[31mThis script must be run as root\e[0m" 1>&2
     exit 1
 fi
-
-interact() {
-   printf "%s " "${LG}Press enter to continue${NC}\n"
-   read ans
-}
-
-# ADD SOMETHING THAT SHOWS REPOS
 
 # Colors
 C=$(printf '\033')
@@ -33,6 +15,35 @@ BLUE="${C}[1;34m"
 LG="${C}[1;37m" #LightGray
 DG="${C}[1;90m" #DarkGray
 NC="${C}[0m"
+
+# Enable logging
+if [ -z "$BASELINE_LOGGING" ]; then
+   printf "Logging to /var/tmp/.log/baseline-standard.sh\n"
+   LOGFILE="/var/tmp/.log/baseline-standard.sh"
+   export BASELINE_LOGGING=1
+   printf "${YELLOW}Logging session to %s${NC}\n" "$LOGFILE"
+   exec sh -c "\"$0\" $* 2>&1 | tee \"$LOGFILE\""
+fi
+
+printf "▗▄▄▖  ▗▄▖  ▗▄▄▖▗▄▄▄▖▗▖   ▗▄▄▄▖▗▖  ▗▖▗▄▄▄▖     ▗▄▄▖▗▄▄▄▖▗▄▖ ▗▖  ▗▖▗▄▄▄  ▗▄▖ ▗▄▄▖ ▗▄▄▄ \n";
+printf "▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌   ▐▌     █  ▐▛▚▖▐▌▐▌       ▐▌     █ ▐▌ ▐▌▐▛▚▖▐▌▐▌  █▐▌ ▐▌▐▌ ▐▌▐▌  █\n";
+printf "▐▛▀▚▖▐▛▀▜▌ ▝▀▚▖▐▛▀▀▘▐▌     █  ▐▌ ▝▜▌▐▛▀▀▘     ▝▀▚▖  █ ▐▛▀▜▌▐▌ ▝▜▌▐▌  █▐▛▀▜▌▐▛▀▚▖▐▌  █\n";
+printf "▐▙▄▞▘▐▌ ▐▌▗▄▄▞▘▐▙▄▄▖▐▙▄▄▖▗▄█▄▖▐▌  ▐▌▐▙▄▄▖    ▗▄▄▞▘  █ ▐▌ ▐▌▐▌  ▐▌▐▙▄▄▀▐▌ ▐▌▐▌ ▐▌▐▙▄▄▀\n\n";
+printf " ====================================================================== v0.1.2 ===== \n\n";
+
+# v0.1.1 - add interactions between checks
+#        - remove duplicate cron checks
+#        - show repos
+#        - remove duplicate ld_preload check
+#        - fix a ton of syntax errors in shell and curl
+# v0.1.2 - added logging
+
+interact() {
+   printf "%s\n" "${LG}Press enter to continue${NC}"
+   read ans
+}
+
+# ADD SOMETHING THAT SHOWS REPOS
 
 printf "${LG}GENERAL SYSTEM INFO${NC}\n"
 cat /etc/os-release
@@ -57,7 +68,7 @@ interact
 printf "${BLUE}Checking open ports${NC}\n"
 ss -tulpn
 printf "${BLUE}Show processes running on ports${NC}\n"
-sudo lsof -i -P -n
+lsof -i -P -n
 
 interact
 
@@ -82,8 +93,8 @@ fi
 interact
 
 printf "${BLUE}Checking for nopasswd in sudoers files${NC}\n"
-sudo grep "NOPASSWD" /etc/sudoers
-sudo grep -R "NOPASSWD" /etc/sudoers.d/
+grep "NOPASSWD" /etc/sudoers
+grep -R "NOPASSWD" /etc/sudoers.d/
 
 interact
 
@@ -103,7 +114,7 @@ interact
 
 printf "${BLUE}Showing authorized SSH keys (concerning only systems with key-based auth enabled)${NC}\n"
 printf "=== Root ===\n"
-sudo cat /root/.ssh/authorized_keys
+cat /root/.ssh/authorized_keys
 for user_dir in /home/*; do
    auth_file="$user_dir/.ssh/authorized_keys"
    if [ -f "$auth_file" ]; then
@@ -160,9 +171,9 @@ interact
 
 printf "${BLUE}Checking Docker/Podman containers${NC}\n"
 if command -v docker > /dev/null 2>&1; then
-   sudo docker ps -a
+   docker ps -a
 elif command -v podman > /dev/null 2>&1; then
-   sudo podman ps -a
+   podman ps -a
 fi
 
 interact
@@ -183,28 +194,28 @@ printf "${BLUE}Checking for pwnkit vulnerability${NC}\n"
 polkitVersion=$(systemctl status polkit.service 2>/dev/null | grep version | cut -d " " -f 9)
 if [ "$(apt list --installed 2>/dev/null | grep polkit | grep -c 0.105-26)" -ge 1 ] || [ "$(rpm -qa | grep -i polkit | grep -ic "0.11[3-9]")" -ge 1 ]; then
    printf "${RED}SYSTEM MAY BE VULNERABLE TO PWNKIT\n"
-   printf "RUN ${NC}sudo chmod -s $(which pkexec) ${RED}to mitigate${NC}\n"
+   printf "RUN ${NC}chmod -s $(which pkexec) ${RED}to mitigate${NC}\n"
 fi
 
 interact
 
 printf "${BLUE}Checking for executables and scripts in /etc and /var${NC}\n"
-sudo find /etc -type f -exec file {} + | grep "ELF"
-sudo find /var -type f -exec file {} + | grep "ELF"
+find /etc -type f -exec file {} + | grep "ELF"
+find /var -type f -exec file {} + | grep "ELF"
 grep -rIl "^#!" /etc
 
 interact
 
 printf "${BLUE}Would you like to install lynis? (y/n)${NC}\n"
 read INSTALL_LYNIS
-if [ $INSTALL_LYNIS = "y" ]; then
+if [ "$INSTALL_LYNIS" = "y" ]; then
    printf "${BLUE}Starting lynis, redirecting output to /var/tmp/lynis${NC}\n"
    if command -v dnf > /dev/null 2>&1; then
-      sudo dnf install lynis -y
+      dnf install lynis -y
    elif command -v apt > /dev/null 2>&1; then
-      sudo apt install lynis -y
+      apt install lynis -y
    elif command -v apk > /dev/null 2>&1; then
-      sudo apk install lynis
+      apk install lynis
    fi
    nohup lynis audit system > /var/tmp/lynis 2>&1 &
 fi

@@ -13,12 +13,12 @@ LOGFILE="deploy.log"
 {
 printf "${BLUE}=== Starting deployment script ===${NC}\n"
 
-chmod +x harden.sh
-chmod +x autofirewall.sh
+chmod +x ../harden.sh
+chmod +x ../autofirewall.sh
 chmod +x ../activate.sh
 
 printf "${BLUE}=== Compressing resoures ===${NC}\n"
-tar -czvpf resources.tar.gz harden.sh autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*
+tar -czvpf resources.tar.gz ../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*
 
 printf "${BLUE}=== Running deploy ===${NC}\n"
 deploy_host() {
@@ -51,29 +51,27 @@ EOF
     printf "${COLOR}[$DIR]${NC} Files transferred successfully.\n"
 
     # Create remote logging directory
-    sshpass -p "$OLDPASS" ssh -o StrictHostKeyChecking=no "$D_USER"@"$IP" "mkdir -p /var/tmp/.log"
+    sshpass -p "$OLDPASS" ssh -o StrictHostKeyChecking=no "$D_USER"@"$IP" "mkdir -p /var/tmp/.log && chmod 777 /var/tmp/.log"
 
-
-    # unpack files
+    # Unpack files
     sshpass -p "$OLDPASS" ssh -o StrictHostKeyChecking=no "$D_USER"@"$IP" "tar -xzf /var/tmp/resources.tar.gz -C /var/tmp"
 
-    # firewall
-    printf "${COLOR}[$DIR]${NC} starting autofirewall.sh\n"
-    sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/autofirewall.sh | tee /var/tmp/.log/autofirewall.log" < /dev/null \
-      2>&1 | sed "s/^/[$DIR] /"
-    printf "${COLOR}[$DIR]${NC} done autofirewall.sh\n"
+    # Activate - includes firewall, backup, auditd, watchdawg, busybox, and hardening - errors in deploy.log
+    printf "${COLOR}[$DIR]${NC} starting activate.sh - includes autofirewall, backup, auditd, watchdawg, busybox, and harden deploys\n"
 
-    # activate
-    printf "${COLOR}[$DIR]${NC} starting activate.sh - includes backup, auditd, watchdawg, and busybox deploys\n"
-    sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/activate.sh | tee /var/tmp/.log/activate.log" < /dev/null \
-      2>&1 | sed "s/^/[$DIR] /"
+
+    # Run sudo/doas depending on presence of sudo
+    HAS_SUDO=$(sshpass -p "$OLDPASS" ssh -o StrictHostKeyChecking=no "$D_USER"@"$IP" 'command -v sudo >/dev/null 2>&1 && echo yes || echo no')
+
+    if [ "$HAS_SUDO" = "yes" ]; then
+      sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/activate.sh '$HASH' 2>&1 | tee /var/tmp/.log/activate.log" < /dev/null \
+        2>&1 | sed "s/^/[$DIR] /" >> "$LOGFILE"
+    else
+      sshpass -p "$OLDPASS" ssh -tt -o StrictHostKeyChecking=no "$D_USER"@"$IP" "doas /var/tmp/activate.sh '$HASH' 2>&1 | tee /var/tmp/.log/activate.log" \
+        <<< "$OLDPASS" 2>&1 | sed "s/^/[$DIR] /" >> "$LOGFILE"
+    fi
+
     printf "${COLOR}[$DIR]${NC} done activate.sh\n"
-
-    # hardening
-    printf "${COLOR}[$DIR]${NC} starting harden.sh\n"
-    sshpass -p "$OLDPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/harden.sh '$HASH' | tee /var/tmp/.log/harden.log" < /dev/null \
-      2>&1 | sed "s/^/[$DIR] /"
-    printf "${COLOR}[$DIR]${NC} done harden.sh\n"
 
     printf "${COLOR}[$DIR] --- All done ---${NC}\n"
   else
@@ -84,7 +82,7 @@ EOF
 
 export RED GREEN BLUE YELLOW LIGHT_MAGENTA LG NC
 export -f deploy_host
-export D_USER OLDPASS
+export D_USER OLDPASS LOGFILE
 
 parallel -j 10 --line-buffer deploy_host :::: hostfile 2>&1
 
