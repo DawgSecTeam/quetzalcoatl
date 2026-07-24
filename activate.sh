@@ -18,6 +18,24 @@ mkdir -p /var/tmp/.log
 chmod 777 /var/tmp/.log
 
 ############################
+# Install critical software
+############################
+
+if ! command -v iptables > /dev/null; then
+   printf "iptables missing, installing...\n"
+
+   if command -v apt > /dev/null; then
+      apt install -y iptables
+   fi
+
+   if command -v apk > /dev/null; then
+      apk add -q iptables
+      rc-update add iptables
+      rc-service iptables save
+   fi
+fi
+
+############################
 # Taking initial backup
 ############################
 printf "==> Deploying backup\n"
@@ -48,7 +66,10 @@ chmod 0600 /etc/audit/rules.d/standard.rules
 chattr +i /etc/audit/rules.d/standard.rules
 
 printf "====> Restarting service\n"
-if command -v augenrules >/dev/null 2>&1; then
+if command -v rc-service > /dev/null 2>&1; then
+    rc-update add auditd default
+    rc-service auditd restart
+elif command -v augenrules >/dev/null 2>&1; then
     augenrules --load
 else
     service auditd restart

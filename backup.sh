@@ -112,7 +112,8 @@ backup() {
     fi
 
     ## Ports and firewall
-    ss -tulpn      > $BACKUP_DIR/$SNAPSHOT/listeningports.txt
+    # use lsof here instead of ss, because ss is not available on all systems
+    lsof -i -P -n  > $BACKUP_DIR/$SNAPSHOT/listeningports.txt
     # read iptable rules with iptables-save to avoid network calls
     if [ -x "$(command -v iptables-save)" ];
     then
@@ -120,6 +121,7 @@ backup() {
     else
         iptables -n -L > $BACKUP_DIR/$SNAPSHOT/iptablesrules.txt
     fi
+    # if nftables is available
     nft list ruleset > $BACKUP_DIR/$SNAPSHOT/nftablesrules.txt
 
     ## Kernel modules

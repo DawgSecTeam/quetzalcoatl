@@ -25,31 +25,33 @@ touch "$LOG_DIR/wd.log"
 chattr +a /var/log/.wd/
 
 
-# Read files and to watch
+# Directory entries get recursively expanded into a separate watchlist file
+# (kept alongside $INPUT, e.g. /etc/kernel/watchlist), never back into $INPUT
+# itself. Previously new entries were appended to $INPUT while it was still
+# being read, which permanently grew /etc/kernel/sources on every restart.
+WATCHLIST="$(dirname "$INPUT")/watchlist"
+: > "$WATCHLIST"
+
+# Read files and folders to watch
 while IFS= read -r line; do
    if [ -d "$line" ]; then
-
-   #LAST_CHAR="${ROW: -1}"
-   #if [[ "$LAST_CHAR" == "/" ]]; then
-      # handle folders
-      for filename in "$line"/*; do
-         #if [ -f "$filename" ]; then
-            # ADD THE THNIGLY
-         #else if [ -d "$filename" ]; then
-            # ADD THE THINGY
-            echo "$filename" >> "$INPUT"
-         #fi
-      done
+      # handle folders: recurse with find into the watchlist file
+      find "$line" -type f >> "$WATCHLIST"
    elif [ -f "$line" ]; then
-
       # handle files
-      #if [ -e "$filename"
       printf "adding file to watchlist: %s\n" "$line"
+      echo "$line" >> "$WATCHLIST"
       cp -p --parents "$line" "$BACKUP_DIR"
    else
       printf "file or folder %s doesn't exist\n" "$line"
    fi
 done < "$INPUT"
+
+# Seed the backup dir with the initial contents of every expanded file
+while IFS= read -r line; do
+   [ -f "$line" ] || continue
+   [ -f "$BACKUP_DIR$line" ] || cp -p --parents "$line" "$BACKUP_DIR"
+done < "$WATCHLIST"
 
 
 while true; do
@@ -66,7 +68,7 @@ while true; do
          diff "$line" "$BACKUP_DIR$line" >> "$LOG_DIR/wd.log"
          cp -p "$line" "$BACKUP_DIR$line"
       fi
-   done < "$INPUT"
+   done < "$WATCHLIST"
 
    sleep 3
 done
@@ -75,13 +77,4 @@ done
 # v1.0.0 -> watch files and output changes to log
 # v1.1.0 -> add support for watching directories
 # v1.1.1 -> mark only .wd dir as append only instead of /var/log
-
-
-
-
-
-## watchdawg
-##############
-# **watchdawg**
-# - `watchdawg.sh:40` appends into `$INPUT` while the enclosing loop is still reading it (`:52 done < "$INPUT"`). Terminates on a normal tree but spins forever on a symlink cycle, and it permanently rewrites the deployed `/etc/kernel/sources` so every restart re-expands a longer list. An empty directory also appends a literal `path/*` entry. Expand into a separate watchlist file under `$BACKUP_DIR` and leave the sources file alone — `find "$line" -type f` replaces the manual recursion
-# - `watchdawg-sources:12-13` duplicate `/etc/pam.d` and `/etc/ssh` from lines 7-8
+# v1.1.2 -> expand directories into a separate watchlist file instead of the sources file

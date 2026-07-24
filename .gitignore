@@ -9,3 +9,4 @@ testing/.env
 minzero/resources.tar.gz
 systems/*
 !systems/README.md
+minzero/discordkey

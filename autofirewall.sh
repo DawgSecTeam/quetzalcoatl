@@ -2,19 +2,6 @@
 set -e
 echo "[*] Applying hardened firewall rules..."
 
-if ! command -v iptables > /dev/null; then
-   if command -v apt > /dev/null; then
-      apt install -y iptables
-   fi
-
-   if command -v apk > /dev/null; then
-      apk add -q iptables
-      rc-update add iptables
-      rc-service iptables save
-   fi
-fi
-
-
 
 # Stop and disable ufw/firewalld to prevent collisions
 if command -v systemctl > /dev/null 2>&1; then

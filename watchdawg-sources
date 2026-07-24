@@ -9,5 +9,3 @@
 /etc/sudoers
 /etc/rc.local
 /etc/nsswitch.conf
-/etc/pam.d/
-/etc/ssh/
