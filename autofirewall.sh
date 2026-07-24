@@ -2,10 +2,22 @@
 set -e
 echo "[*] Applying hardened firewall rules..."
 
-if command -v apk > /dev/null; then
- apk add iptables
- rc-update add iptables
- rc-service iptables save
+
+# Stop and disable ufw/firewalld to prevent collisions
+if command -v systemctl > /dev/null 2>&1; then
+   if systemctl list-unit-files 2>/dev/null | grep -q '^firewalld\.service'; then
+      systemctl stop firewalld 2>/dev/null || true
+      systemctl disable firewalld 2>/dev/null || true
+      systemctl mask firewalld 2>/dev/null || true
+   fi
+   if systemctl list-unit-files 2>/dev/null | grep -q '^ufw\.service'; then
+      systemctl stop ufw 2>/dev/null || true
+      systemctl disable ufw 2>/dev/null || true
+   fi
+fi
+
+if command -v ufw > /dev/null 2>&1; then
+   ufw disable 2>/dev/null || true
 fi
 
 #precaution
@@ -29,15 +41,15 @@ iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 # --------------------------------------------------
 # Allow inbound traffic ONLY to listening TCP ports
 # --------------------------------------------------
-IN=$(head -n1 /tmp/port-sources)
-OUT=$(tail -n1 /tmp/port-sources)
+IN=$(head -n1 /var/tmp/port-sources)
+OUT=$(tail -n1 /var/tmp/port-sources)
 
 #INBOUND
 for port in $IN; do
-  printf "[+] Allow inbound TCP port $port\n"
-	iptables -A INPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
-  printf "[+] Allow inbound UDP port $port\n"
-	iptables -A INPUT -p udp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
+   printf "[+] Allow inbound TCP port $port\n"
+   iptables -A INPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
+   printf "[+] Allow inbound UDP port $port\n"
+   iptables -A INPUT -p udp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
 done
 
 printf "[+] Deny outbound ICMP\n"
@@ -45,10 +57,10 @@ iptables -A OUTPUT -p icmp -j DROP
 
 #OUTBOUND
 for port in $OUT; do
-	  printf "[+] Allow outbound TCP port $port\n"
-	iptables -A OUTPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
-  printf "[+] Allow outbound UDP port $port\n"
-	iptables -A OUTPUT -p udp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
+   printf "[+] Allow outbound TCP port $port\n"
+   iptables -A OUTPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
+   printf "[+] Allow outbound UDP port $port\n"
+   iptables -A OUTPUT -p udp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
 done
 
 # ICMP

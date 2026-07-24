@@ -2,10 +2,9 @@
 
 **On the clean system**
 - install scored services
-- run baseline/data-collection.sh
+- run `backup.sh baseline`
 
 **On the compromised system**
 - ensure deploy was ran
-- run /tmp/activate.sh
-- run /tmp/standard.sh
-- run /tmp/specific.sh
+- run /var/tmp/baseline/standard.sh
+- run /var/tmp/baseline/specific.sh

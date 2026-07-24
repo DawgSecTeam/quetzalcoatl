@@ -1,17 +1,23 @@
 # Dependencies
-Only for the host system  
-parallel, sshpass  
+Only for the host system
+parallel, sshpass
 
 # Order of operations
-* YOU NEED TO CREATE A `hostname` FIL
-    * must be in this format: `<ip> <system-name> <new-password-hash>`
+* YOU NEED TO CREATE A `hostfile` FILE in this directory
+    * must be in this format: `<system-name> <ip> <ssh-user> <current-password> <new-password-hash>`
     * one line per host
-    * pregenerate all password hashes with the script in funcs
-* execute `deploy.sh <current-username> <current-password>`, which runs
-    * harden.sh (sets /bin/false shells, add bluey, sets bluey password)
-    * autofirewall.sh (sets iptable rules)
-    * uploads baseline and other scripts to /tmp
-* execute `activate.sh <system-name>`
-    * runs backup.sh
-    * deploys auditd rules
-    * deploys watchdawg
+    * `<system-name>` must match a directory in `../systems/`, which gets uploaded along with its `port-sources`
+    * pregenerate all password hashes with `../funcs/passwordHasher.sh`
+* execute `deploy.sh`
+    * tars up all resources (`harden.sh` and `autofirewall.sh` live at the repo root, alongside
+      `activate.sh`, not in `minzero/`) and scps everything to /var/tmp
+    * creates /var/tmp/.log for remote logs
+    * runs activate.sh (passed the host's hashed password), which
+        * runs autofirewall.sh (sets iptable rules)
+        * runs backup.sh
+        * installs auditd and applies the rules
+        * deploys watchdawg to /etc/kernel
+        * deploys busybox to /opt/busybox and replaces /bin/false
+        * runs harden.sh (sets /bin/false shells, adds bluey, sets bluey password, locks system accounts)
+* deploy logs are saved to `deploy.log` on the host
+* after deploy, run the baseline scripts (`standard.sh`, `specific.sh`) on the target

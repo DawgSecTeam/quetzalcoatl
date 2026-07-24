@@ -20,7 +20,7 @@ sed -ri 's@(:[^:]*$)@:/bin/false@' /etc/passwd
 
 # Add blueteam user
 if command -v apk > /dev/null; then
-   adduser bluey -h /home/bluey -s /bin/sh
+   adduser -D bluey -h /home/bluey -s /bin/sh
 else
    useradd bluey -m -s /bin/sh
 fi
@@ -29,7 +29,7 @@ rm -rf /home/bluey/*
 rm -rf /home/bluey/.*
 printf "Cleaned up home directory\n"
 
-if getent group wheel >/dev/null; then 
+if getent group wheel >/dev/null; then
    usermod -aG wheel bluey
    addgroup bluey wheel
    if command -v apk > /dev/null; then
@@ -49,7 +49,7 @@ printf "Received: %s\n" "$hashed"
 
 sed -i "s|^bluey:[^:]*|bluey:$hashed|" /etc/shadow
 chmod 644 /etc/passwd
-chmod 600 /etc/shadow 
+chmod 600 /etc/shadow
 
 # List of users to keep unlocked
 ALLOWED_USERS="nobody bluey"
@@ -78,4 +78,6 @@ ls -lh /bin/false
 
 chattr +i /etc/passwd
 chattr +i /etc/shadow
-shred /var/tmp/pass
+chattr +i /etc/group
+
+shred -uf /var/tmp/pass_*

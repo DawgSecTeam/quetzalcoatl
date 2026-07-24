@@ -101,9 +101,9 @@
 ## User, group, password databases
 -w /etc/group -p wa -k etcgroup
 -w /etc/passwd -p wa -k etcpasswd
--w /etc/gshadow -k etcgroup
--w /etc/shadow -k etcpasswd
--w /etc/security/opasswd -k opasswd
+-w /etc/gshadow -p wa -k etcgroup
+-w /etc/shadow -p wa -k etcpasswd
+-w /etc/security/opasswd -p wa -k opasswd
 
 ## Sudoers file changes
 -w /etc/sudoers -p wa -k actions
@@ -181,8 +181,8 @@
 -w /etc/exim4/ -p wa -k mail
 
 ## SSH configuration
--w /etc/ssh/sshd_config -k sshd
--w /etc/ssh/sshd_config.d -k sshd
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d -p wa -k sshd
 
 ## root ssh key tampering
 -w /root/.ssh -p wa -k rootkey
@@ -309,8 +309,8 @@
 -w /usr/bin/gdbus -p x -k gdubs_call
 
 ## setfiles
--a always,exit -F path=/usr/bin/setfiles -F perm=x -F auid>=500 -F auid!=4294967295 -k -F T1078_Valid_Accounts
--a always,exit -F path=/usr/sbin/setfiles -F perm=x -F auid>=500 -F auid!=4294967295 -k -F T1078_Valid_Accounts
+-a always,exit -F path=/usr/bin/setfiles -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
+-a always,exit -F path=/usr/sbin/setfiles -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 
 ### dbus
 -a always,exit -F path=/lib64/dbus-1/dbus-daemon-launch-helper -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
@@ -381,7 +381,7 @@
 
 # YAST/Zypper/RPM (SuSE)
 -w /bin/rpm -p x -k software_mgmt
--w /usr/bin/zypper -k software_mgmt
+-w /usr/bin/zypper -p x -k software_mgmt
 
 # DPKG / APT-GET (Debian/Ubuntu)
 -w /usr/bin/dpkg -p x -k software_mgmt
@@ -393,16 +393,16 @@
 # Special Software ------------------------------------------------------------
 
 ## Docker
--w /usr/bin/dockerd -k docker
--w /usr/bin/docker -k docker
--w /usr/bin/docker-containerd -k docker
--w /usr/bin/docker-runc -k docker
+-w /usr/bin/dockerd -p x -k docker
+-w /usr/bin/docker -p x -k docker
+-w /usr/bin/docker-containerd -p x -k docker
+-w /usr/bin/docker-runc -p x -k docker
 -w /var/lib/docker -p wa -k docker
--w /etc/docker -k docker
--w /etc/sysconfig/docker -k docker
--w /etc/sysconfig/docker-storage -k docker
--w /usr/lib/systemd/system/docker.service -k docker
--w /usr/lib/systemd/system/docker.socket -k docker
+-w /etc/docker -p wa -k docker
+-w /etc/sysconfig/docker -p wa -k docker
+-w /etc/sysconfig/docker-storage -p wa -k docker
+-w /usr/lib/systemd/system/docker.service -p wa -k docker
+-w /usr/lib/systemd/system/docker.socket -p wa -k docker
 
 # ipc system call
 # /usr/include/linux/ipc.h
