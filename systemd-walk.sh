@@ -80,8 +80,8 @@ is_openrc() {
 # ── Gather services ───────────────────────────────────────────────
 # Returns a deduplicated, sorted list of service unit names.
 gather_services() {
-    local running=""
-    local enabled=""
+    running=""
+    enabled=""
 
     if is_systemd; then
         # Get running services
@@ -99,6 +99,7 @@ gather_services() {
 # ── Get unit file path ────────────────────────────────────────────
 get_unit_file() {
     local svc="$1"
+    svc="$1"
     # Check common systemd unit file locations
     for dir in /etc/systemd/system /run/systemd/system /usr/lib/systemd/system /lib/systemd/system; do
         if [ -f "$dir/$svc" ]; then
@@ -107,7 +108,6 @@ get_unit_file() {
         fi
     done
     # Try systemctl to find the unit
-    local unit_path
     unit_path=$(systemctl show -p FragmentPath "$svc" 2>/dev/null | cut -d= -f2)
     if [ -n "$unit_path" ] && [ -f "$unit_path" ]; then
         printf "%s" "$unit_path"
@@ -119,14 +119,13 @@ get_unit_file() {
 # ── Show unit file contents ───────────────────────────────────────
 show_unit_file() {
     local svc="$1"
-    local unit_path
+    svc="$1"
     unit_path=$(get_unit_file "$svc")
 
     if [ -n "$unit_path" ]; then
         subheader "Unit file: $unit_path"
         cat "$unit_path" 2>/dev/null | head -80
         # Check if file is longer than 80 lines
-        local line_count
         line_count=$(wc -l < "$unit_path" 2>/dev/null)
         if [ "$line_count" -gt 80 ]; then
             printf "${DG}... (%s lines total, showing first 80)${NC}\n" "$line_count"
@@ -139,11 +138,10 @@ show_unit_file() {
 # ── Show service status ───────────────────────────────────────────
 show_service_status() {
     local svc="$1"
+    svc="$1"
 
     if is_systemd; then
-        local state
         state=$(systemctl is-active "$svc" 2>/dev/null)
-        local enabled_state
         enabled_state=$(systemctl is-enabled "$svc" 2>/dev/null)
 
         case "$state" in
@@ -167,6 +165,7 @@ show_service_status() {
 # ── Action: Disable service ───────────────────────────────────────
 action_disable() {
     local svc="$1"
+    svc="$1"
     log "DISABLE: $svc"
     printf "  ${YELLOW}Disabling${NC} %s ... " "$svc"
     if systemctl disable "$svc" 2>>"$LOG_FILE"; then
@@ -181,11 +180,9 @@ action_disable() {
 
 # ── Action: Remove service ────────────────────────────────────────
 action_remove() {
-    local svc="$1"
-    local unit_path
+    svc="$1"
+    unit_path=""
     log "REMOVE: $svc"
-
-    # Stop the service
     printf "  ${RED}Stopping${NC} %s ... " "$svc"
     if systemctl stop "$svc" 2>>"$LOG_FILE"; then
         printf "${GREEN}[OK]${NC}\n"
@@ -243,8 +240,8 @@ action_remove() {
 # ── Interactive prompt ────────────────────────────────────────────
 prompt_action() {
     local svc="$1"
-    local reply
-
+    svc="$1"
+    reply=""
     printf "\n${LIGHT_CYAN}  >>> %s${NC}\n" "$svc"
     show_service_status "$svc"
     show_unit_file "$svc"
@@ -299,7 +296,7 @@ run_non_interactive() {
     while IFS=: read -r svc action || [ -n "$svc" ]; do
         # Skip empty lines and comments
         case "$svc" in
-            ""|\#*) continue ;;
+            ""|'#'*) continue ;;
         esac
 
         # Trim whitespace
@@ -362,11 +359,13 @@ run_interactive() {
     printf "\n${YELLOW}Press Enter to begin reviewing services...${NC} "
     read -r
 
-    # Walk through each service
-    printf "%s\n" "$SERVICES" | while read -r svc; do
+    _svc_list=$(mktemp)
+    printf "%s\n" "$SERVICES" > "$_svc_list"
+    while IFS= read -r svc; do
         prompt_action "$svc"
         printf "\n${DG}────────────────────────────────────────────────────${NC}\n"
-    done
+    done < "$_svc_list"
+    rm -f "$_svc_list"
 
     log "=== Interactive mode completed ==="
 }
