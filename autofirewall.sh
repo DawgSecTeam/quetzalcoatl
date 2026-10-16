@@ -81,12 +81,7 @@ iptables -P FORWARD DROP
 iptables -A INPUT  -m conntrack --ctstate INVALID -j DROP
 iptables -A OUTPUT -m conntrack --ctstate INVALID -j DROP
 
-
-# Allow vertical
-iptables -A INPUT -s 192.168.111.0/24 -j ACCEPT
-iptables -A OUTPUT -s 192.168.111.0/24 -j ACCEPT
-
-#v6
+# Disable ipv6
 sysctl -w net.ipv6.conf.all.disable_ipv6=1
 sysctl -w net.ipv6.conf.default.disable_ipv6=1
 
@@ -97,11 +92,10 @@ ip6tables -P FORWARD DROP
 echo "[*] Saving iptable rules across reboot..."
 
 mkdir -p /etc/iptables
-iptables-save -f /etc/iptables/iptables.rules
-ip6tables-save -f /etc/iptables/ip6tables.rules
+iptables-save > /etc/iptables/iptables.rules
+ip6tables-save > /etc/iptables/ip6tables.rules
 
 echo "[✓] Firewall locked down successfully."
-
 
 
 # autofirewall.sh automatically logs dropped packets to /var/log/syslog or /var/log/messages

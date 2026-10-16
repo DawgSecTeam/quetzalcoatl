@@ -1,0 +1,240 @@
+CRITICAL
+------------
+
+3. autofirewall.sh - Dead Rules After Default Deny
+   File: autofirewall.sh:76-82
+   Lines 76-78 set the default policy to DROP. Lines 81-82 then append the
+   INVALID conntrack DROP rules AFTER the policy change, making them
+   unreachable (the default deny already drops everything not ACCEPTed).
+   Fix: Move the INVALID DROP rules before the policy change on line 76.
+
+4. autofirewall.sh - ICMP Contradiction
+   File: autofirewall.sh:56,67
+   Line 56 drops all outbound ICMP. Line 67 allows all inbound ICMP.
+   The system can receive ping replies but cannot send pings.
+   Fix: Either allow outbound ICMP or drop both directions consistently.
+
+5. autofirewall.sh - set -e with Firewall Script
+   File: autofirewall.sh:2
+   `set -e` causes the script to abort on any iptables command failure.
+   If a command fails mid-script (e.g., missing module, wrong syntax),
+   the firewall is left in a partially-flushed state with no protection.
+   Fix: Remove `set -e` and check return codes explicitly, or add
+   a trap to restore rules on failure.
+
+6. harden.sh - Race Condition: All Shells Locked Before bluey Exists
+   File: harden.sh:19,23
+   Line 19 sets every user's shell to /bin/false, including root.
+   Line 23 creates the bluey user with /bin/sh AFTER all shells are locked.
+   If the script fails between lines 19-23, the system is unrecoverable via SSH.
+   Additionally, line 29 `rm -rf /home/bluey/.*` matches `.` and `..`.
+   Fix: Create bluey before modifying /etc/passwd. Use `find` with
+   `-not -name '.' -not -name '..'` instead of `rm -rf /home/bluey/.*`.
+
+7. harden.sh - No Validation of Hashed Password Arg (blank bluey password) [NEW]
+   File: harden.sh:46,50
+   `hashed="$1"` is never checked. If activate.sh is invoked without an arg
+   (or with empty $1), line 50 writes an EMPTY password field for bluey.
+   The lock loop (line 68) only touches UID<1000 users, so bluey (UID>=1000)
+   stays unlocked with a passwordless, root-escalatable account.
+   Also misleading: line 45 says "Setting password for root & bluey" but
+   root's password is never set - root is only locked via `!` in the loop.
+   Fix: Validate that $1 is a non-empty hash before writing; bail if missing.
+
+8. autofirewall.sh - Fails Open if port-sources Missing [NEW]
+   File: autofirewall.sh:44
+   `IN=$(head -n1 /var/tmp/port-sources)`. If the file is absent, under
+   `set -e` the assignment fails and the script aborts AFTER lines 24-25
+   already set `-P INPUT/OUTPUT ACCEPT` - the host is left wide open with
+   no rules, while activate.sh still prints "Finished autofirewall.sh".
+   Fix: Check the file exists before flushing/opening the firewall; exit
+   with an error if it is missing.
+
+
+HIGH (6)
+--------
+
+9. deploy.sh - Plaintext Password File on Disk
+   File: minzero/deploy.sh:37-41
+   Passwords are written to pass_$DIR files on disk, then SCP'd to
+   remote hosts. These files are never cleaned up after use.
+   Fix: Use sshpass directly without writing passwords to disk, or
+   use SSH key-based authentication exclusively.
+
+10. c2scanner.sh / angryc2scanner.sh - Disk Exhaustion
+    Files: c2scanner.sh:12, angryc2scanner.sh:18
+    Both scripts write a file every 0.5 seconds to scans/ and never clean
+    up old files. Approximately 172,800 files per day will fill the disk.
+    Fix: Keep only the last N snapshots, or use a ring buffer approach.
+
+11. angryc2scanner.sh - Kills All Processes on Any Network Change
+    File: angryc2scanner.sh:28-43
+    Kills every process with a TCP connection whenever the network state
+    changes, including the scanner itself, SSH sessions, and system services.
+    The "leave important processes alone" whitelist code remains commented out.
+    Fix: Implement the process whitelist before deploying, or add a
+    configuration file for allowed PIDs/process names.
+
+12. funcs/detectOS.sh - bash-only `&>` under /bin/sh (always reports "rhel") [NEW]
+    File: funcs/detectOS.sh:3-11
+    Every `command -v <pm> &> /dev/null` uses the non-POSIX `&>` redirection.
+    On dash (Debian/Ubuntu /bin/sh), `cmd &> file` parses as `cmd &`
+    (background) plus a stray `> file`, so the if-condition sees a background
+    job that always succeeds - detectOS always echoes "rhel" regardless of OS.
+    sh -n passes because the syntax is valid-but-misinterpreted.
+    Fix: Replace `&>` with `>/dev/null 2>&1`.
+
+13. grep -P / grep -Po (GNU-only) breaks on Alpine [NEW]
+    Files: auditkey-notifier.sh:18-21,32; baseline/standard.sh:102-103;
+           angryc2scanner.sh:28
+    All run under `#!/bin/sh` but use GNU-only `grep -P`/`-oP` PCRE flags.
+    Busybox grep (the default on Alpine targets) lacks -P, so these fail.
+    auditkey-notifier.sh even acknowledges it in a comment but still ships
+    broken on the Alpine target.
+    Fix: Drop PCRE; use POSIX grep/awk, or `-E` where possible.
+
+14. deploy.sh - doas Fallback is Racy
+    File: minzero/deploy.sh:71
+    `ssh -tt ... <<< "$OLDPASS"` feeds the password over the pty immediately,
+    racing the remote `doas` prompt. Works intermittently at best.
+    Fix: Use SUDO_ASKPASS-equivalent for doas, or a pty-aware expect flow.
+
+
+LOW (17)
+--------
+
+15. Logging exec Can Fail Silently
+    Files: baseline/standard.sh:24-25, baseline/specific.sh:16-17
+    `exec sh -c "\"$0\" $* 2>&1 | tee \"$LOGFILE\""`
+    `$*` is unquoted - arguments with spaces will break word splitting.
+    If /var/tmp/.log/ does not exist (race with activate.sh), the exec
+    replaces the shell with a failing process and the script dies.
+    Fix: Quote `$@` properly. Ensure the log directory exists before exec.
+
+16. chmod 777 on Log Directory
+    File: activate.sh:18
+    `chmod 777 /var/tmp/.log` makes the log directory world-writable.
+    Any local user can create, modify, or delete log files, or create
+    symlinks for arbitrary file writes.
+    Fix: Use `chmod 700` or `chmod 755` with appropriate ownership.
+
+17. backup.sh Baseline Mode Force-Overwrites
+    File: backup.sh:208
+    The `baseline` mode runs `rm -rf "$BACKUP_DIR/$SNAPSHOT"` before
+    creating the backup, bypassing the `snapshot_bail_if_exists` guard.
+    This contradicts the "prevents overwriting snapshots" design.
+    Fix: Call `snapshot_bail_if_exists` before the rm, or document the
+    intentional override clearly.
+
+18. backup.sh - umask 077 Affects Child Processes
+    File: backup.sh:19
+    `umask 077` is set globally for the entire script. Child processes
+    like systemctl, apt, dnf, or apk will create files with 600
+    permissions instead of their expected defaults, potentially breaking
+    package manager caches or service files.
+    Fix: Use `umask` locally within a subshell, or restore the original
+    umask after creating private files.
+
+19. backup.sh - Unquoted $BACKUP_DIR Throughout
+    File: backup.sh:82-128 (20+ occurrences)
+    `$BACKUP_DIR` is used unquoted in redirections and arguments.
+    Currently safe because the path is hardcoded to `/var/tmp/bk`
+    (no spaces), but is a latent bug if the path ever changes.
+    Fix: Quote all `$BACKUP_DIR` references as `"$BACKUP_DIR"`.
+
+20. testing/revertProxmox.sh - Success Branch is Unreachable Dead Code [NEW]
+    File: testing/revertProxmox.sh:39
+    The inner `if [ "$statusX" = "running" ]` compares against unquoted
+    `running`, but `jq` returns `"running"` (with literal quotes), so the
+    `[DONE] exit 1` success path never fires. The loop only exits via the
+    (correct, quoted) outer while condition.
+    Fix: Either compare against `"running"` consistently, or drop the dead
+    inner branch and rely on the outer loop condition.
+
+21. configurations/sshd_config - Backwards Hardening
+    File: configurations/sshd_config
+    - PubkeyAuthentication no (keys disabled)
+    - PasswordAuthentication yes (passwords enabled)
+    - RSAAuthentication no (deprecated since OpenSSH 7.6)
+    - IgnoreRhosts yes appears on both lines 4 and 7 (duplicate)
+    For a hardened system, pubkey auth should be enabled and password
+    auth disabled. The current configuration is the opposite.
+    Fix: Enable PubkeyAuthentication, disable PasswordAuthentication,
+    remove deprecated RSAAuthentication, remove duplicate IgnoreRhosts.
+
+22. funcs/shellColors.sh - C Variable Never Defined
+    File: funcs/shellColors.sh
+    All color variables use `${C}` but `C` (which should hold \033)
+    is never defined in this file. Every color variable expands to
+    literal text like `[1;31m` without the escape prefix.
+    Fix: Add `C=$(printf '\033')` at the top of the file, or have
+    consumers define C before sourcing.
+
+23. auditd-rules - Typo gdubs_call
+    File: auditd-rules:309
+    `-w /usr/bin/gdbus -p x -k gdubs_call`
+    The key name `gdubs_call` should be `gdbus_call`.
+    Fix: Rename the key to `gdbus_call`.
+
+24. auditkey-notifier.sh - Undefined $webhook
+    File: auditkey-notifier.sh:26,40
+    The `webhook` variable is used in curl commands but never assigned
+    a value. Line 9 has a comment "YOU NEED TO FILL THE webhook VARIABLE"
+    but no default or input mechanism exists.
+    Fix: Source the webhook from funcs/discordNotif.sh, an environment
+    variable, or a command-line argument.
+
+25. auditkey-notifier.sh - Injection in JSON Payload
+    File: auditkey-notifier.sh:26,40
+    Shell variables ($COMM, $PID, $PPID, $UID) are interpolated directly
+    into the JSON curl payload. If $COMM contains quote characters or
+    backslashes, the JSON breaks and could inject curl arguments.
+    Fix: Use `jq` to construct the JSON payload safely, or escape
+    special characters before interpolation.
+
+26. harden.sh - ALLOWED_USERS is Dead Code [NEW]
+    File: harden.sh:55-74
+    The lock loop only selects UID<1000 (`awk '$3 < 1000'`), but both
+    "nobody" (UID 65534) and "bluey" (UID>=1000) can never appear in that
+    set, so the `is_allowed` check never protects anyone. The "keep these
+    users unlocked" feature is a no-op.
+    Fix: Either drop the dead guard or base the loop on a real allowlist.
+
+27. watchdawg.sh - GNU-only `cp --parents` (busybox cp lacks it) [NEW]
+    File: watchdawg.sh (seed loop + change loop)
+    Uses `cp -p --parents "$line" "$BACKUP_DIR"`. The suite installs busybox
+    as the default on Alpine, and busybox cp does not support `--parents`,
+    so the seed/backup copy would fail on that target.
+    [INFERENCE - bundled busybox could not be executed on this host]
+    Fix: Use a busybox-compatible copy (e.g. `cp -p` after mkdir -p), or
+    guard with a GNU cp fallback.
+
+28. angryc2scanner.sh - Monitors UDP but Murders only TCP [NEW]
+    File: angryc2scanner.sh:18,28
+    The diff uses `ss -tupn` (UDP included) but the hitlist uses `ss -tpn`
+    (TCP only). A UDP-only network change triggers the kill routine against
+    an unrelated/empty TCP hitlist - inconsistent detection vs. action.
+    Fix: Match the monitored protocols to the kill list (or vice versa).
+
+29. baseline/standard.sh - Empty Test Expressions Print Errors [NEW]
+    File: baseline/standard.sh:82,109
+    `if [ $(awk ... | wc -l) -gt 0 ]`. When there are zero matches the
+    substitution is empty, producing `[ -gt 0 ]` -> `[: -gt: unary operator
+    expected` (confirmed). Both the UID-0 check and passwordless-user check
+    emit a spurious error on every clean system.
+    Fix: Quote and guard, e.g. `[ "$(awk ... | wc -l)" -gt 0 ]`.
+
+30. baseline/standard.sh - printf Format-String Injection [NEW]
+    File: baseline/standard.sh:54,59
+    `printf "$LD_PRELOAD\n"` / `printf "$PATH\n"` use the variable as the
+    format string. A `%` in the value mangles output (confirmed: PATH with
+    `%d` prints garbage).
+    Fix: Use `printf '%s\n' "$LD_PRELOAD"` / `printf '%s\n' "$PATH"`.
+
+31. deploy/ptp.sh - Hardcoded 8.8.8.8 + GNU grep -Po [NEW]
+    File: deploy/ptp.sh
+    `PTP_INTERFACE=$(ip route get 8.8.8.8 ...)` - if no route to 8.8.8.8
+    exists the interface is empty; also uses `grep -Po` which busybox grep
+    lacks. Script is marked untested.
+    Fix: Derive the default interface via `ip route` on the default route,
+    and use POSIX grep/awk.

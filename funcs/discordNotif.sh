@@ -1,6 +1,6 @@
 ALERT_KEY1="recon"
 ALERT_KEY2="susp_activity"
-webhook="https://discord.com/api/webhooks/1475853787406143551/WktnCqT0mRF6qez5biL7fguzgzA1_Yt7PWQ__oDa_VxstC8lZhERXzExKl2MgJiFGso4"
+webhook=""
 
 COMM="hi"
 JSON='{"embeds":[{"title":"'$ALERT_KEY1'", "fields": [{"name": "PID", "value": "'$PID'"}]}]}'

@@ -1,0 +1,94 @@
+Investigation of reported bugs F1/F2/F3
+========================================
+
+F1 (HIGH) - OUTPUT-chain egress filtering bypassed for vertical-subnet traffic
+-------------------------------------------------------------------------------
+VERDICT: CONFIRMED (against last commit 3a82850), appears already fixed
+in an uncommitted working-tree edit.
+
+- git show HEAD:autofirewall.sh line 87 has:
+    iptables -A OUTPUT -s 192.168.111.0/24 -j ACCEPT
+  added after `-P OUTPUT DROP` (line 77) and after the INVALID drop (line 82),
+  as the report describes.
+
+- Root cause is slightly different from the report's framing: comparing to
+  ai-untested/force-iptables.sh:377, the intended rule uses `-d` (destination):
+    -A OUTPUT -d 192.168.111.0/24 -j ACCEPT
+  i.e. "allow outbound TO the internal subnet." The shipped autofirewall.sh
+  uses `-s` (source) instead, which matches the host's OWN source IP and
+  therefore accepts outbound packets to ANY destination, not just the
+  internal subnet. The real bug is a -s/-d mixup, not just rule placement.
+
+- Inaccuracy in the report's "How to verify" section: it claims the ACCEPT
+  rule appears "at position 2, right after the default policy." `-P` (policy)
+  doesn't create a numbered chain rule and doesn't affect position. Walking
+  the script's `-A OUTPUT` calls in order (lo -> established/related -> icmp
+  DROP -> outbound-port allow-loop -> LOG -> INVALID DROP -> vertical ACCEPT)
+  puts this rule LAST in the chain, not 2nd. The bypass conclusion still
+  holds, just not for the stated reason.
+
+- Status: `git diff autofirewall.sh` shows the two vertical ACCEPT lines have
+  already been deleted locally (uncommitted). Real bug in the last commit;
+  looks like a fix is already in progress but not committed.
+
+
+F2 (MEDIUM) - Discord notifier: JSON injection + undefined $webhook
+---------------------------------------------------------------------
+VERDICT: CONFIRMED, both sub-issues, plus the hardcoded token. All three
+were already tracked in this repo's own issues.txt before this report
+(issue #1, #24, #25).
+
+- auditkey-notifier.sh extracts COMM/PID/PPID/UID via `grep -oP` (lines
+  18-21, 32-35) and interpolates them unescaped into hand-built JSON on
+  lines 26 and 40. A `"` in a process name breaks the JSON.
+
+- $webhook is referenced on lines 26/40 but never assigned anywhere in the
+  script. Line 9 is literally the comment "YOU NEED TO FILL THE webhook
+  VARIABLE TO MAKE THE PROGRAM WORK." Repo-wide grep confirms no sourcing of
+  funcs/discordNotif.sh or any env/config file happens, so $webhook expands
+  empty and every alert curl fails silently -> alerting is dead, as reported.
+
+- funcs/discordNotif.sh:3 hardcodes a live-looking Discord webhook URL/token,
+  tracked in git history (commits f9579eb, b3e7069). Real secret exposure;
+  should be rotated regardless of whether the file is dead code.
+
+- Not in the original report: auditkey-notifier.sh is not invoked anywhere
+  in activate.sh, the deploy scripts, or any systemd unit in this repo - it's
+  a standalone/unwired script, not part of the automated deploy flow. Worth
+  confirming whether it's meant to be wired in.
+
+- The "tee failure against a missing /var/tmp/.log" note in the original
+  report is a reproduction detail (that directory is created by
+  activate.sh/backup.sh via `mkdir -p`), not an independent code defect.
+
+
+F3 (LOW) - Rate-limited LOG rules precede the vertical ACCEPT rules
+-----------------------------------------------------------------------
+VERDICT: CONFIRMED (against last commit 3a82850), same caveat as F1.
+
+- Confirmed in git show HEAD:autofirewall.sh: LOG rules (lines 72-73)
+  precede the vertical ACCEPT rules (86-87) in script/chain order. Since LOG
+  is non-terminating, a packet from the vertical subnet not caught by an
+  earlier rule gets logged with a DROP_INPUT/DROP_OUTPUT prefix and still
+  falls through to the ACCEPT rule below it and is actually accepted -
+  so the log lies, as reported.
+
+- Same status caveat as F1: the vertical ACCEPT rules this depends on are
+  already removed in the uncommitted working tree, so this specific
+  logs-lie-about-accepted-traffic scenario is moot once that edit is
+  committed (no ACCEPT rule left below the LOG line in that codepath).
+
+
+Summary
+-------
+F1: Real (against last commit). Root cause is a -s/-d mixup rather than pure
+    ordering. One detail in the report's "how to verify" section is
+    inaccurate (rule position). Already appears to be fixed uncommitted.
+F2: Real, all sub-parts, plus the hardcoded token - and all three were
+    already in issues.txt before this report. The vulnerable script isn't
+    currently wired into any deploy path. The webhook token in
+    funcs/discordNotif.sh is live-looking, committed to git history, and
+    should be rotated regardless.
+F3: Real (against last commit), same "already fixed uncommitted" caveat as F1.
+
+No code changes were made as part of this investigation.
