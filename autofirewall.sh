@@ -1,5 +1,52 @@
 #!/bin/sh
 set -e
+
+if [ "$(id -u)" -ne 0 ]; then
+  printf "[x] This script requires root privileges. Exiting\n"
+  exit 1
+fi
+
+IN=$(head -n1 /var/tmp/port-sources)
+OUT=$(tail -n1 /var/tmp/port-sources)
+download_ports=false
+
+# parse flags
+while [[ $# -gt 0 ]]; do
+  case $1 in
+  -h | --help)
+    cat <<EOF
+[*] Displaying the help menu
+Valid flags:
+  -h | --help       Displays this help menu
+  -d | --download   Unlocks port 80 and 53 reguardless of the port sources
+                    to allow package managers to download files.
+EOF
+    #      -s | --source     Specify a source file
+    exit 0
+    ;;
+
+  # enables ports required by package managers
+  -d | --download)
+    echo "[*] Enabled package manager ports 80 and 53"
+    download_ports=true
+    shift 1
+    ;;
+
+  -*)
+    echo "[x] unrecognized flag"
+    echo "For more information use the \"-h\" flag"
+    exit 1
+    ;;
+
+  *)
+    shift 1
+    ;;
+    # someone else can add this feature if needed (potential input injection vulnerability)
+    # -s|--source)
+    #   echo "[*] Attempting to set ports source"
+  esac
+done
+
 echo "[*] Applying hardened firewall rules..."
 
 # Stop and disable ufw/firewalld to prevent collisions
@@ -40,8 +87,6 @@ iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 # --------------------------------------------------
 # Allow inbound traffic ONLY to listening TCP ports
 # --------------------------------------------------
-IN=$(head -n1 /var/tmp/port-sources)
-OUT=$(tail -n1 /var/tmp/port-sources)
 
 #INBOUND
 for port in $IN; do
