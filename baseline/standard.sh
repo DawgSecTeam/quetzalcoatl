@@ -77,7 +77,7 @@ iptables -L
 
 interact
 
-printf "${BLUE}Checking only root has id ${NC}\n"
+printf "${BLUE}Checking only root has id 0${NC}\n"
 #awk -F: '($3 == "0") {print}' /etc/passwd
 if [ $(awk -F: '($3 == 0 && $1 != "root")' /etc/passwd | wc -l) -gt 0 ]; then
     printf "${RED}Multiple UID 0 accounts found!${NC}\n"
@@ -85,11 +85,19 @@ fi
 
 interact
 
-printf "${BLUE}Checking for passwordless login through PAM${NC}\n"
+printf "${BLUE}Checking for empty passwords in PAM${NC}\n"
 if grep -Rq "nullok" /etc/pam.d; then
-   printf "${RED}PASSWORDLESS AUTHENTICATION IS ENABLED IN PAM${NC}\nCheck the /etc/pam.d directory to secure it\n";
+   printf "${RED} CHECK THE FOLLOWING DIRECTORIES (for nullok):${NC}\n"
+   awk '/nullok/ {printf FILENAME ":line " FNR " - " $0"\n"}' /etc/pam.d/*
 fi
 
+interact
+
+printf "${BLUE}Checking for passwordless login through PAM${NC}\n"
+if [ $(awk '$2 == "sufficient" && $3 == "pam_permit.so"' /etc/pam.d/* | wc -l) -gt 0 ]; then
+   printf "${RED}CHECK THE FOLLOWING DIRECTORIES:${NC}\n"
+   awk '{ if ($2 == "sufficient" && $3 == "pam_permit.so") printf FILENAME ":line " FNR " - " $0 "\n" }' /etc/pam.d/*
+fi
 interact
 
 printf "${BLUE}Checking for nopasswd in sudoers files${NC}\n"
