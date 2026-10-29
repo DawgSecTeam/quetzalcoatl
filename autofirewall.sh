@@ -12,7 +12,7 @@ download_ports=false
 nuke=false
 
 # parse flags
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case $1 in
   -h | --help)
     cat <<EOF
@@ -55,7 +55,7 @@ EOF
   esac
 done
 
-if ["$nuke" = false]; then
+if [ "$nuke" = false ]; then
   echo "[*] Applying hardened firewall rules..."
 fi
 
@@ -86,7 +86,7 @@ iptables -X
 iptables -t nat -F
 iptables -t mangle -F
 
-if ["$nuke" = true]; then
+if [ "$nuke" = true ]; then
   echo "[✓] Firewall is no longer"
   exit 0
 fi
@@ -128,12 +128,18 @@ iptables -A INPUT -p icmp -j ACCEPT
 # --------------------------------------------------
 # Allows port 80 and port 53 if applicable
 # --------------------------------------------------
-if $download_ports; then
+if [ $download_ports = true ]; then
   printf "[+] Allow outbound UDP port 53 (DNS)\n"
   iptables -A OUTPUT -p udp --dport 53 -m conntrack --ctstate NEW -j ACCEPT
 
   printf "[+] Allow outbound TCP port 80\n"
   iptables -A OUTPUT -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
+
+  if command -v dnf &> /dev/null; then
+    printf "[+] Allow outbound TCP port 443\n"
+    iptables -A OUTPUT -p tcp --dport 443 -m conntrack --ctstate NEW -j ACCEPT
+  fi
+
 fi
 
 # --------------------------------------------------
