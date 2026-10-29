@@ -128,7 +128,7 @@ iptables -A INPUT -p icmp -j ACCEPT
 # --------------------------------------------------
 # Allows port 80 and port 53 if applicable
 # --------------------------------------------------
-if [ $download_ports = true ]; then
+if [ "$download_ports" = true ]; then
   printf "[+] Allow outbound UDP port 53 (DNS)\n"
   iptables -A OUTPUT -p udp --dport 53 -m conntrack --ctstate NEW -j ACCEPT
 
