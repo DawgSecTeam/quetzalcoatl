@@ -9,6 +9,7 @@ fi
 IN=$(head -n1 /var/tmp/port-sources)
 OUT=$(tail -n1 /var/tmp/port-sources)
 download_ports=false
+nuke=false
 
 # parse flags
 while [[ $# -gt 0 ]]; do
@@ -18,11 +19,18 @@ while [[ $# -gt 0 ]]; do
 [*] Displaying the help menu
 Valid flags:
   -h | --help       Displays this help menu
+  -c | --clear      Clears the firewall of all rules and sets default allow
   -d | --download   Unlocks port 80 and 53 reguardless of the port sources
                     to allow package managers to download files.
 EOF
     #      -s | --source     Specify a source file
     exit 0
+    ;;
+
+  -c | --clear)
+    echo "[*] Nuking firewall"
+    nuke=true
+    shift $#
     ;;
 
   # enables ports required by package managers
@@ -47,7 +55,9 @@ EOF
   esac
 done
 
-echo "[*] Applying hardened firewall rules..."
+if ["$nuke" = false]; then
+  echo "[*] Applying hardened firewall rules..."
+fi
 
 # Stop and disable ufw/firewalld to prevent collisions
 if command -v systemctl >/dev/null 2>&1; then
@@ -75,6 +85,11 @@ iptables -F
 iptables -X
 iptables -t nat -F
 iptables -t mangle -F
+
+if ["$nuke" = true]; then
+  echo "[✓] Firewall is no longer"
+  exit 0
+fi
 
 # Loopback
 iptables -A INPUT -i lo -j ACCEPT
