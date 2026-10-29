@@ -85,7 +85,7 @@ fi
 
 interact
 
-printf "${BLUE}Checking for empty passwords in PAM${NC}\n"
+printf "${BLUE}Checking if empty passwords are allowed in PAM${NC}\n"
 if grep -Rq "nullok" /etc/pam.d; then
    printf "${RED} CHECK THE FOLLOWING DIRECTORIES (for nullok):${NC}\n"
    awk '/nullok/ {printf FILENAME ":line " FNR " - " $0"\n"}' /etc/pam.d/*
