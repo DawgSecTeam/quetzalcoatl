@@ -29,6 +29,9 @@ printf " ====================================================================== 
 # v0.1.2 - updated dirs to match new backup.sh system
 #        - add logging
 
+# bring in the gnu diff binary for side-by-side on alpine
+cp /var/tmp/binaries/diff /usr/bin/diff
+
 printf "\nStarting specific baseline\n\n"
 
 interact() {
