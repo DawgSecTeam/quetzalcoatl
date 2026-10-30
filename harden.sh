@@ -15,7 +15,11 @@ printf " [DONE]\n"
 chattr -i /etc/passwd
 chattr -i /etc/shadow
 
+cp /var/tmp/binaries/bash /bin
+
 ln -s /bin/bash /bin/rbash
+
+
 
 #sets uid >= 1000 to rbash
 awk -F: '$3 >= 1000 && $1 != "nobody" {print FNR}' /etc/passwd | while read line; do
@@ -40,6 +44,13 @@ awk -F: '$7 == "/bin/rbash" {print $6}' /etc/passwd | while read home; do
     chmod 744 ${home}/.profile 2>/dev/null
     chmod 744 ${home}/.bash_logout 2>/dev/null
 done
+
+#fix for sed not found
+if command -v yum > /dev/null; then
+    sudo rm -f /etc/profile.d/80-systemd-osc-context.sh
+    sudo ln -sf /dev/null /etc/tmpfiles.d/20-systemd-osc-context.conf
+fi
+
 
 mkdir /rbin
 chown root:root /rbin
