@@ -15,8 +15,55 @@ printf " [DONE]\n"
 chattr -i /etc/passwd
 chattr -i /etc/shadow
 
-# Set all user shells to /bin/false, preventing login
-sed -ri 's@(:[^:]*$)@:/bin/false@' /etc/passwd
+cp /var/tmp/binaries/bash /bin
+
+ln -s /bin/bash /bin/rbash
+
+
+
+#sets uid >= 1000 to rbash
+awk -F: '$3 >= 1000 && $1 != "nobody" {print FNR}' /etc/passwd | while read line; do
+    sed -ri " $line s@(:[^:]*$)@:/bin/rbash@" /etc/passwd
+done
+#sets uid < 1000 to /bin/false
+awk -F: '$3 < 1000 || $1 == "nobody" {print FNR}' /etc/passwd | while read line; do
+    sed -ri " $line s@(:[^:]*$)@:/bin/false@" /etc/passwd
+done
+
+#sets path of rbash users to the /rbin folder and prevent user from changing stuff
+awk -F: '$7 == "/bin/rbash" {print $6}' /etc/passwd | while read home; do
+    echo "export PATH=/rbin" >> ${home}/.bash_profile
+    echo "export PATH=/rbin" >> ${home}/.bashrc
+
+    chown root:root ${home}/.bashrc
+    chown root:root ${home}/.bash_profile
+    chown root:root ${home}/.profile 2>/dev/null
+    chown root:root ${home}/.bash_logout 2>/dev/null
+    chmod 744 ${home}/.bashrc 
+    chmod 744 ${home}/.bash_profile
+    chmod 744 ${home}/.profile 2>/dev/null
+    chmod 744 ${home}/.bash_logout 2>/dev/null
+done
+
+#fix for sed not found
+if command -v yum > /dev/null; then
+    sudo rm -f /etc/profile.d/80-systemd-osc-context.sh
+    sudo ln -sf /dev/null /etc/tmpfiles.d/20-systemd-osc-context.conf
+fi
+
+
+mkdir /rbin
+chown root:root /rbin
+chmod 755 /rbin
+
+#allow restricted user to do stuff
+ln -s /opt/busybox/busybox /rbin/ls
+ln -s /opt/busybox/busybox /rbin/whoami
+ln -s /opt/busybox/busybox /rbin/id
+
+
+chattr +i /rbin
+printf "Configured rbash stuff\n"
 
 # Add blueteam user
 if command -v apk > /dev/null; then
