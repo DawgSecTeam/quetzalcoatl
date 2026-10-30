@@ -172,8 +172,8 @@ ip6tables -P FORWARD DROP
 echo "[*] Saving iptable rules across reboot..."
 
 mkdir -p /etc/iptables
-iptables-save -f /etc/iptables/iptables.rules
-ip6tables-save -f /etc/iptables/ip6tables.rules
+iptables-save > /etc/iptables/iptables.rules
+ip6tables-save > /etc/iptables/ip6tables.rules
 
 echo "[✓] Firewall locked down successfully."
 

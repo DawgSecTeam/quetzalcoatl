@@ -24,6 +24,9 @@ BACKUP_DIR=/var/tmp/bk
 mkdir -p $BACKUP_DIR
 chmod 700 $BACKUP_DIR
 
+# Create logging dir
+mkdir /var/tmp/.log
+
 cat > "$BACKUP_DIR/sources.txt" << 'EOF'
 /etc
 /home

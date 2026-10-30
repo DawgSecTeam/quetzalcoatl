@@ -84,7 +84,7 @@ export RED GREEN BLUE YELLOW LIGHT_MAGENTA LG NC
 export -f deploy_host
 export D_USER OLDPASS LOGFILE
 
-parallel -j 10 --line-buffer deploy_host :::: hostfile 2>&1
+grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' hostfile | parallel -j 10 --line-buffer deploy_host :::: - 2>&1
 
 printf "${BLUE}=== Finished ===${NC}\n"
 
