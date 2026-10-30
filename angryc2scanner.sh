@@ -37,9 +37,9 @@ do
          prev=$ppid
          ppid=$(ps --no-headers -fp "$prev" | awk '$1 { print $3 }')
          kill -9 "$prev";
-         echo "done murding $prev"
+         echo "done murdering $prev"
          done
-       echo "done murding $line"
+       echo "done murdering $line"
     done < hitlist
   fi
 

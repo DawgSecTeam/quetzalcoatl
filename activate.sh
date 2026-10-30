@@ -36,6 +36,13 @@ if ! command -v iptables > /dev/null; then
 fi
 
 ############################
+# setting up lax firewall
+############################
+printf "Starting autofirewall.sh with package manager\n"
+/var/tmp/autofirewall.sh -d 2>&1 | tee /var/tmp/.log/autofirewall.log
+printf "Finished autofirewall.sh with package manager\n"
+
+############################
 # Taking initial backup
 ############################
 printf "==> Deploying backup\n"
