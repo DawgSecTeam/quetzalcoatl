@@ -57,9 +57,9 @@ chown root:root /rbin
 chmod 755 /rbin
 
 #allow restricted user to do stuff
-ln -s /bin/ls /rbin/ls
-ln -s /bin/whoami /rbin/whoami
-ln -s /bin/id /rbin/id
+ln -s /opt/busybox/busybox /rbin/ls
+ln -s /opt/busybox/busybox /rbin/whoami
+ln -s /opt/busybox/busybox /rbin/id
 
 
 chattr +i /rbin
