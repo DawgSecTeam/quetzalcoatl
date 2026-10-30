@@ -48,6 +48,7 @@ chmod 755 /rbin
 #allow restricted user to do stuff
 ln -s /bin/ls /rbin/ls
 ln -s /bin/whoami /rbin/whoami
+ln -s /bin/id /rbin/id
 
 
 chattr +i /rbin
