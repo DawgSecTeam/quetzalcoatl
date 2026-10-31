@@ -148,8 +148,59 @@ backup() {
     printf "============\nBACKUP COMPLETED\n============\n"
 }
 
+# Files harden.sh pins immutable; they must be unlocked before a restore and
+# re-locked afterwards, otherwise cp fails with EPERM on exactly the files that
+# matter (passwd/shadow/group).
+IMMUTABLES="/etc/passwd /etc/shadow /etc/group /etc/gshadow /etc/sudoers /etc/audit/rules.d/standard.rules"
+
+restore_preflight() {
+    [ -d "$BACKUP_DIR/$SNAPSHOT/filesystem" ] \
+        || { printf "[ERROR] snapshot '%s' has no filesystem/ tree - nothing to restore\n" "$SNAPSHOT"; return 1; }
+    [ -r "$BACKUP_DIR/sources.txt" ] \
+        || { printf "[ERROR] %s/sources.txt missing - restore has no source list\n" "$BACKUP_DIR"; return 1; }
+
+    # A snapshot that cannot even be listed will fail halfway across /etc.
+    for crit in etc/passwd etc/shadow etc/group etc/passwd- etc/shadow-; do
+        if [ ! -f "$BACKUP_DIR/$SNAPSHOT/filesystem/$crit" ]; then
+            printf "[ERROR] snapshot is missing /%s - refusing to restore\n" "$crit"
+            return 1
+        fi
+    done
+
+    # Fail early on immutability instead of reporting a completed restore that
+    # skipped the critical files.
+    for f in $IMMUTABLES; do
+        [ -e "$f" ] || continue
+        if lsattr -d "$f" 2>/dev/null | grep -q 'i'; then
+            printf "[ERROR] %s is immutable (chattr +i) - restore cannot overwrite it\n" "$f"
+            printf "        re-run with FORCE_RESTORE=1 to unlock and re-lock it automatically\n"
+            [ "$FORCE_RESTORE" = "1" ] || return 1
+        fi
+    done
+    return 0
+}
+
+log_and_propagate() {
+    # Run a function with its output mirrored to the backup log while keeping its
+    # exit status: "restore | tee log" returns tee's status, which is why a
+    # half-failed restore used to look successful to the caller.
+    _out=$("$@" 2>&1)
+    _rc=$?
+    printf '%s\n' "$_out" | tee -a /var/tmp/.log/backup.log
+    return $_rc
+}
+
 restore() {
     printf "========================\nRUNNING RESTORE\n========================\n"
+    restore_preflight || { printf "============\nRESTORE ABORTED (preflight)\n============\n"; return 1; }
+
+    RESTORE_FAILED=0
+    if [ "$FORCE_RESTORE" = "1" ]; then
+        for f in $IMMUTABLES; do
+            [ -e "$f" ] && lsattr -d "$f" 2>/dev/null | grep -q 'i' && chattr -i "$f"
+        done
+    fi
+
     if [ -d "$BACKUP_DIR/$SNAPSHOT/filesystem" ]; then
         printf "Please note that restore only applies to files\n"
 
@@ -168,7 +219,10 @@ restore() {
                     | sed "s|^|$src|" >> "$extras"
             fi
 
-            cp -a "$dest/." "${src}/"
+            if ! cp -a "$dest/." "${src}/"; then
+                printf "[ERROR] restore of %s failed (see messages above)\n" "$src"
+                RESTORE_FAILED=$((RESTORE_FAILED + 1))
+            fi
 
             # SELinux relabling
             if [ -x "$(command -v restorecon)" ]; then
@@ -178,15 +232,35 @@ restore() {
 
         rm -f "$BACKUP_DIR/.snapshot.list" "$BACKUP_DIR/.live.list"
 
+        if [ "$FORCE_RESTORE" = "1" ]; then
+            for f in $IMMUTABLES; do
+                [ -e "$f" ] && chattr +i "$f"
+            done
+        fi
+
+        # Verify the critical files actually match the snapshot.
+        for crit in etc/passwd etc/shadow etc/group; do
+            if ! cmp -s "$BACKUP_DIR/$SNAPSHOT/filesystem/$crit" "/$crit"; then
+                printf "[ERROR] /%s does not match the snapshot after restore\n" "$crit"
+                RESTORE_FAILED=$((RESTORE_FAILED + 1))
+            fi
+        done
+
         if [ -s "$extras" ]; then
             printf "== Present now but NOT in the snapshot, and NOT removed: ==\n"
             cat "$extras"
             printf "== Saved to %s ==\n" "$extras"
         fi
 
+        if [ "${RESTORE_FAILED:-0}" -gt 0 ]; then
+            printf "============\nRESTORE INCOMPLETE - %s source(s) failed\n============\n" "$RESTORE_FAILED"
+            return 2
+        fi
         printf "============\nRESTORE COMPLETED\n============\n"
+        return 0
     else
         printf "============\nINVALID SNAPSHOT, RESTORE FAILED\n============\n"
+        return 1
     fi
 }
 
@@ -203,7 +277,7 @@ elif [ "$1" = "restore" ]; then
         printf "No restore name given, exiting.\n"
     else
         SNAPSHOT=$2
-        restore 2>&1 | tee -a /var/tmp/.log/backup.log
+        log_and_propagate restore || exit $?
     fi
 elif [ "$1" = "baseline" ]; then
     SNAPSHOT="baseline"
@@ -237,7 +311,7 @@ else
         printf "restore from: "
         read -r snapshot_to_restore_from
         SNAPSHOT=$snapshot_to_restore_from
-        restore 2>&1 | tee -a /var/tmp/.log/backup.log
+        log_and_propagate restore || exit $?
     else
         printf "Exiting\n"
     fi

@@ -6,6 +6,14 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# Fail early and loudly: with no iptables binary every rule below is a no-op and
+# the box silently stays default-allow.
+if ! command -v iptables >/dev/null 2>&1; then
+  printf "[x] iptables is not available - refusing to continue, no firewall would be applied\n"
+  printf "    install it first (apt/dnf/apk install iptables)\n"
+  exit 127
+fi
+
 IN=$(head -n1 /var/tmp/port-sources)
 OUT=$(tail -n1 /var/tmp/port-sources)
 download_ports=false

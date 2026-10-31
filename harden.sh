@@ -76,23 +76,88 @@ rm -rf /home/bluey/*
 rm -rf /home/bluey/.*
 printf "Cleaned up home directory\n"
 
-if getent group wheel >/dev/null; then
-   usermod -aG wheel bluey
-   addgroup bluey wheel
-   if command -v apk > /dev/null; then
-      echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel
-      chmod 0440 /etc/sudoers.d/wheel
-   fi
+# Pick the admin group that actually exists here (sudo uses "sudo" on
+# Debian/Ubuntu, "wheel" everywhere else; some Alpine images have neither).
+if getent group sudo >/dev/null 2>&1; then
+   ADMIN_GROUP=sudo
+elif getent group wheel >/dev/null 2>&1; then
+   ADMIN_GROUP=wheel
 else
-   usermod -aG sudo bluey
+   ADMIN_GROUP=wheel
+   groupadd wheel 2>/dev/null || addgroup wheel 2>/dev/null
 fi
 
-printf "Added to sudoers group\n"
+# usermod is not part of busybox (Alpine ships it in pwdutils), so fall back to
+# addgroup and then to a direct /etc/group edit.
+if command -v usermod >/dev/null 2>&1; then
+   usermod -aG "$ADMIN_GROUP" bluey
+elif command -v addgroup >/dev/null 2>&1; then
+   addgroup bluey "$ADMIN_GROUP"
+else
+   # Last resort (neither usermod nor addgroup): rewrite the group line with awk.
+   awk -F: -v OFS=: -v g="$ADMIN_GROUP" '
+      $1 == g { if (index("," $4 ",", ",bluey,") == 0) $4 = ($4 == "" ? "bluey" : $4 ",bluey") }
+      { print }
+   ' /etc/group > /etc/group.dawgtmp && chown root:root /etc/group.dawgtmp && chmod 644 /etc/group.dawgtmp && mv /etc/group.dawgtmp /etc/group
+fi
 
-printf "Setting password for root & bluey user\n"
+# Grant escalation with whatever the box actually provides. Alpine images use
+# doas, not sudo: writing /etc/sudoers.d/wheel there did nothing (the directory
+# does not even exist) while still printing "Added to sudoers group".
+GRANTED=""
+if command -v sudo >/dev/null 2>&1; then
+   mkdir -p /etc/sudoers.d
+   printf '%%%s ALL=(ALL) ALL\n' "$ADMIN_GROUP" > /etc/sudoers.d/dawg-bluey
+   chmod 0440 /etc/sudoers.d/dawg-bluey
+   if command -v visudo >/dev/null 2>&1; then
+      visudo -cf /etc/sudoers.d/dawg-bluey || printf "WARNING: sudoers snippet failed validation\n"
+   fi
+   GRANTED="sudo"
+fi
+if command -v doas >/dev/null 2>&1; then
+   touch /etc/doas.conf
+   chmod 0600 /etc/doas.conf
+   # doas.conf has no command field: the syntax is "permit :group" (or
+   # "permit nopass :group"), NOT sudo's "%group ALL". Writing "%wheel ALL"
+   # makes doas abort with "syntax error" and disables escalation entirely.
+   # Ignore commented-out lines: stock images ship "# permit persist :wheel".
+   if ! grep -v '^[[:space:]]*#' /etc/doas.conf | grep -qs ":$ADMIN_GROUP"; then
+      printf 'permit :%s\n' "$ADMIN_GROUP" >> /etc/doas.conf
+   fi
+   # Only treat explicit config errors as fatal: doas -C can also return
+   # non-zero for authorization reasons, which must not abort hardening.
+   doas_check=$(doas -C /etc/doas.conf true 2>&1)
+   case "$doas_check" in
+      *syntax*|*invalid*|*"no such file"*)
+         printf "FATAL(23): /etc/doas.conf failed validation - bluey cannot escalate\n"
+         printf '%s\n' "$doas_check"
+         exit 23 ;;
+   esac
+   GRANTED="${GRANTED:+$GRANTED + }doas"
+fi
+
+# Verify the grant instead of asserting it.
+if [ -z "$GRANTED" ]; then
+   printf "FATAL(20): neither sudo nor doas is installed - bluey has no escalation path\n"
+   exit 20
+fi
+in_group=$(awk -F: -v g="$ADMIN_GROUP" '$1==g { print (index("," $4 ",", ",bluey,") > 0) ? "yes" : "no" }' /etc/group)
+if [ "$in_group" != "yes" ]; then
+   printf "FATAL(21): bluey is not in group %s - escalation will fail\n" "$ADMIN_GROUP"
+   exit 21
+fi
+printf "Granted %s via group %s\n" "$GRANTED" "$ADMIN_GROUP"
+
+printf "Setting bluey password (root stays locked)\n"
 hashed="$1"
 
-printf "Received: %s\n" "$hashed"
+# A mangled argument here silently overwrites bluey's hash and locks everybody
+# out (root is locked and every other shell is /bin/false), so validate it.
+case "$hashed" in
+   *'$'*'$'*) printf "Received: %s\n" "$hashed" ;;
+   *) printf "FATAL(22): argument is not a crypt() hash - refusing to touch /etc/shadow\n"
+      exit 22 ;;
+esac
 
 sed -i "s|^bluey:[^:]*|bluey:$hashed|" /etc/shadow
 chmod 644 /etc/passwd
