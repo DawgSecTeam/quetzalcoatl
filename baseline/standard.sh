@@ -233,7 +233,7 @@ interact
 printf "${BLUE}Starting linpeas, redircting output to /var/tmp/linpeas, output can be read with less -r${NC}\n"
 #curl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh -o /var/tmp/lp.sh
 chmod +x /var/tmp/binaries/linpeas.sh
-nohup /var/tmp/binaries/linpeas.sh > /var/tmp/linpeas 2>&1 &
+nohup su -s /bin/sh bluey -c 'exec /var/tmp/binaries/linpeas.sh' > /var/tmp/linpeas 2>&1 < /dev/null &
 
 interact
 
