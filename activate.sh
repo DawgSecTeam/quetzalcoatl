@@ -33,6 +33,14 @@ if ! command -v iptables > /dev/null; then
       rc-update add iptables
       rc-service iptables save
    fi
+
+   if command -v pacman > /dev/null; then
+      pacman -S --noconfirm iptables
+   fi
+
+   if command -v dnf > /dev/null; then
+      dnf install iptables -y
+   fi
 fi
 
 ############################
@@ -64,6 +72,8 @@ else
       apt install auditd -y
    elif command -v apk > /dev/null; then
       apk add audit
+   elif command -v pacman > /dev/null; then
+      pacman -S --noconfirm audit
    fi
 fi
 

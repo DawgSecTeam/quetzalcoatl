@@ -79,7 +79,7 @@ printf "Cleaned up home directory\n"
 if getent group wheel >/dev/null; then
    usermod -aG wheel bluey
    addgroup bluey wheel
-   if command -v apk > /dev/null; then
+   if command -v apk > /dev/null 2>&1 || command -v pacman > /dev/null 2>&1; then
       echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel
       chmod 0440 /etc/sudoers.d/wheel
    fi

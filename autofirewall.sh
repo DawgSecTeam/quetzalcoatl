@@ -135,7 +135,7 @@ if [ "$download_ports" = true ]; then
   printf "[+] Allow outbound TCP port 80\n"
   iptables -A OUTPUT -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
 
-  if command -v dnf &> /dev/null; then
+  if command -v dnf >/dev/null 2>&1 || command -v pacman >/dev/null 2>&1; then
     printf "[+] Allow outbound TCP port 443\n"
     iptables -A OUTPUT -p tcp --dport 443 -m conntrack --ctstate NEW -j ACCEPT
   fi
