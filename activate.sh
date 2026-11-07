@@ -93,6 +93,21 @@ else
 fi
 
 ############################
+# Deploying host EDR (falco + wazuh forwarder)
+############################
+if [ "${EDR_SKIP:-0}" = "1" ]; then
+   printf "==> Skipping EDR deploy (EDR_SKIP=1)\n"
+elif [ -f /var/tmp/edr/deploy-edr.sh ]; then
+   printf "==> Deploying EDR (falco + wazuh)\n"
+   chmod +x /var/tmp/edr/deploy-edr.sh
+   # Fail-soft: EDR problems must never take a scored service down.
+   /var/tmp/edr/deploy-edr.sh 2>&1 | tee /var/tmp/.log/edr.log
+   printf "Finished deploying EDR\n"
+else
+   printf "==> [WARN] EDR module not found at /var/tmp/edr, skipping\n"
+fi
+
+############################
 # Deploying watchdawg
 ############################
 printf "==> Deploying watchdawg\n"

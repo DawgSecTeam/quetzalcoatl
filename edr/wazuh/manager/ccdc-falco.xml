@@ -1,0 +1,36 @@
+<group name="falco,ccdc,">
+  <!--
+    Decodes the JSON that the Falco agent module ships from
+    /var/log/falco/events.json (log_format: json). Without these rules the
+    forwarder delivers events but Wazuh indexes no alert: every Falco event
+    would be an unmatched log entry.
+
+    Install on the manager with edr/wazuh/manager/install-manager.sh.
+    Rule IDs 100700-100709 are reserved for the CCDC EDR module.
+
+    NOTE: do not match on the JSON "priority" key here — analysisd rejects it as
+    a reserved tag name. The CCDC rule name is the reliable discriminator.
+  -->
+
+  <rule id="100700" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="rule">\.</field>
+    <description>Falco event</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <rule id="100701" level="12">
+    <if_sid>100700</if_sid>
+    <field name="rule">^CCDC</field>
+    <description>Falco CCDC: $(rule)</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>ccdc_detection,</group>
+  </rule>
+
+  <rule id="100702" level="5">
+    <if_sid>100700</if_sid>
+    <description>Falco: $(rule)</description>
+  </rule>
+</group>
