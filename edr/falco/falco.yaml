@@ -1,0 +1,54 @@
+# CCDC host EDR — Falco configuration installed by edr/deploy-edr.sh.
+# Minimal by design: unspecified keys fall back to Falco's compiled defaults.
+# The packaged config is preserved as /etc/falco/falco.yaml.orig-edr.
+
+rules_files:
+  - /etc/falco/falco_rules.yaml
+  - /etc/falco/falco_rules.local.yaml
+  - /etc/falco/rules.d
+
+plugins:
+  - name: container
+    library_path: libcontainer.so
+    init_config:
+      label_max_len: 100
+      with_size: false
+
+engine:
+  kind: modern_ebpf
+  modern_ebpf:
+    cpus_for_each_buffer: 2
+    buf_size_preset: 4
+    drop_failed_exit: false
+
+# Only NOTICE and above: keeps the dashboard readable under competition load.
+priority: notice
+
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+buffered_outputs: true
+
+stdout_output:
+  enabled: false
+
+syslog_output:
+  enabled: false
+
+file_output:
+  enabled: true
+  keep_alive: false
+  filename: /var/log/falco/events.json
+
+http_output:
+  enabled: false
+
+webserver:
+  enabled: false
+
+libs_logger:
+  enabled: false
+
+log_stderr: true
+log_syslog: false
+log_level: info

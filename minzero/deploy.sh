@@ -18,7 +18,7 @@ chmod +x ../autofirewall.sh
 chmod +x ../activate.sh
 
 printf "${BLUE}=== Compressing resoures ===${NC}\n"
-tar -czvpf resources.tar.gz ../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*
+tar -czvpf resources.tar.gz ../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../edr
 
 printf "${BLUE}=== Running deploy ===${NC}\n"
 deploy_host() {

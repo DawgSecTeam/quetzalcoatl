@@ -11,3 +11,5 @@ systems/*
 !systems/README.md
 minzero/discordkey
 testing/.env
+edr/pkg/*
+!edr/pkg/.gitkeep

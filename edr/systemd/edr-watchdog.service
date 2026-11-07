@@ -1,0 +1,8 @@
+[Unit]
+Description=EDR tamper watchdog (restart falco/wazuh if killed)
+After=falco-modern-bpf.service wazuh-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/edr-watchdog
+Nice=5

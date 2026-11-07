@@ -1,0 +1,113 @@
+# CCDC competition rules — additional Falco rules for red-team behavior on
+# competition Linux boxes. Self-contained: depends only on the stable rules file
+# (macros like open_write/spawned_process), never on sandbox/incubating tiers.
+# Source: linux-edr-for-ccdc research (03-defenses / 04-tools-techniques).
+
+- list: ccdc_service_procs
+  items: [nginx, httpd, apache2, php-fpm, java, node, dotnet, gunicorn, uwsgi,
+          mariadbd, mysqld, postgres, redis-server, forgejo, gitea, vsftpd, proftpd]
+
+- list: ccdc_persist_paths
+  items: [/etc/sudoers, /etc/passwd, /etc/shadow, /etc/group, /etc/ld.so.preload,
+          /etc/crontab, /etc/localtime, /etc/rc.local, /root/.bashrc, /root/.profile]
+
+- rule: CCDC Authorized Keys Write
+  desc: Any write to an authorized_keys file outside sshd's own tooling (T1098)
+  condition: >
+    open_write and fd.name endswith "/authorized_keys" and not proc.pname = sshd
+  output: authorized_keys modified | file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+          user=%user.name uid=%user.uid loginuid=%user.loginuid parent=%proc.pname tty=%proc.tty
+  priority: CRITICAL
+  tags: [T1098, persistence]
+
+- rule: CCDC Sensitive Path Write
+  desc: Writes to account, sudo, linker and init files (T1543/T1548/T1098)
+  condition: >
+    open_write and fd.name in (ccdc_persist_paths)
+    and not proc.name in (useradd, usermod, userdel, groupadd, groupmod, passwd, shadow,
+                          pwconv, pwunconv, chage, dpkg, apt-get, apt, yum, dnf, rpm, puppet, ansible)
+  output: sensitive file opened for write | file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+          user=%user.name loginuid=%user.loginuid parent=%proc.pname
+  priority: CRITICAL
+  tags: [T1543, T1548, T1098, persistence]
+
+- rule: CCDC Systemd Unit Written
+  desc: New or rewritten systemd unit file (T1543.002)
+  condition: >
+    open_write and (fd.name startswith "/etc/systemd/system/" or fd.name startswith "/usr/lib/systemd/system/")
+    and fd.name endswith ".service" and not proc.name in (dpkg, apt-get, systemctl, deb-systemd-helper, dnf, rpm)
+  output: systemd unit written | file=%fd.name proc=%proc.name cmdline=%proc.cmdline user=%user.name
+  priority: CRITICAL
+  tags: [T1543.002, persistence]
+
+- rule: CCDC Execute From Temp Dir
+  desc: Binary executed out of /tmp, /var/tmp or /dev/shm (T1620/T1059)
+  condition: >
+    spawned_process and (proc.exe startswith "/tmp/" or proc.exe startswith "/var/tmp/"
+                         or proc.exe startswith "/dev/shm/")
+  output: execution from temp dir | exe=%proc.exe cmdline=%proc.cmdline user=%user.name
+          parent=%proc.pname pcmdline=%proc.pcmdline loginuid=%user.loginuid
+  priority: CRITICAL
+  tags: [T1620, T1059]
+
+- rule: CCDC Download Then Execute
+  desc: curl/wget feeding a shell, or base64-decoded payload execution (T1059/T1140)
+  condition: >
+    spawned_process and (proc.cmdline contains "| sh" or proc.cmdline contains "|sh"
+      or proc.cmdline contains "| bash" or proc.cmdline contains "|bash"
+      or proc.cmdline contains "base64 -d" or proc.cmdline contains "--decode")
+      and not proc.pname in (dpkg, apt, apt-get)
+  output: download-to-execute pattern | cmdline=%proc.cmdline user=%user.name parent=%proc.pname
+          pcmdline=%proc.pcmdline
+  priority: CRITICAL
+  tags: [T1059, T1140]
+
+- rule: CCDC Reverse Shell Spawn
+  desc: Shell or netcat spawned with a /dev/tcp pattern or netcat exec mode (T1059.004)
+  condition: >
+    spawned_process and (proc.cmdline contains "/dev/tcp/"
+      or (proc.name in (nc, ncat, netcat, socat) and proc.cmdline contains "exec"))
+  output: reverse shell pattern | cmdline=%proc.cmdline user=%user.name parent=%proc.pname
+          pcmdline=%proc.pcmdline loginuid=%user.loginuid
+  priority: CRITICAL
+  tags: [T1059.004, T1071, command-and-control]
+
+- rule: CCDC Host Egress Outside LAN
+  desc: New outbound connection to a non-RFC1918 destination from a service process (T1071/T1048)
+  condition: >
+    evt.type = connect and fd.typechar = 4
+    and fd.rnet != "10.0.0.0/8" and fd.rnet != "172.16.0.0/12" and fd.rnet != "192.168.0.0/16"
+    and fd.rip != "127.0.0.1" and (evt.rawres >= 0 or evt.res = EINPROGRESS)
+    and proc.pname in (ccdc_service_procs)
+  output: service process connected off-LAN | dst=%fd.rip dport=%fd.rport proc=%proc.name
+          cmdline=%proc.cmdline user=%user.name parent=%proc.pname
+  priority: CRITICAL
+  tags: [T1071, T1048, command-and-control]
+
+# Wazuh's own modules read /etc/shadow and /etc/pam.d/* during every FIM/rootcheck
+# pass; without this exception the stable rule floods the dashboard from minute one.
+- rule: Read sensitive file untrusted
+  override:
+    exceptions: append
+    enabled: replace
+  enabled: true
+  exceptions:
+    - name: ccdc_wazuh_internal
+      fields: [proc.name]
+      values:
+        - [wazuh-agentd]
+        - [wazuh-syscheckd]
+        - [wazuh-modulesd]
+        - [wazuh-logcollector]
+        - [wazuh-execd]
+        - [wazuh-analysisd]
+        - [wazuh-remoted]
+        - [systemd]
+        - [systemd-executor]
+    # systemd re-executes itself with argv[0] set to a number ("9"), so proc.name
+    # matching misses it; match the binary path instead.
+    - name: ccdc_systemd_executor
+      fields: [proc.exepath]
+      values:
+        - [/usr/lib/systemd/systemd-executor]
+        - [/usr/lib/systemd/systemd]
