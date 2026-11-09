@@ -215,6 +215,11 @@ install_build_deps || {
 
 write_config
 
+# The kernel that boots after a restart is the newest installed one, which is not always
+# $(uname -r) on a fresh clone (2026-11-09: built 6.12.107, first reboot booted 6.12.116 and
+# the box came up unfiltered). Build for both: load the running one now, leave the other in
+# /lib/modules so the next boot still loads a module that matches.
+BOOT_KVER=$(ls /lib/modules 2>/dev/null | sort -V | tail -1)
 say "[*] Building $MODULE_NAME.ko against kernel $(uname -r)"
 make -C "$SRC_DIR" clean > /dev/null 2>&1 || true
 # "make | tee log" would report tee's status, which is how a failed build once
@@ -262,6 +267,30 @@ fi
 
 mkdir -p "/lib/modules/$(uname -r)/extra"
 install -m 0644 "$KO" "/lib/modules/$(uname -r)/extra/$MODULE_NAME.ko" || die "could not install $MODULE_NAME.ko"
+
+if [ -n "$BOOT_KVER" ] && [ "$BOOT_KVER" != "$(uname -r)" ] && [ ! -d "/lib/modules/$BOOT_KVER/build" ]; then
+   say "[*] Installing headers for the boot kernel $BOOT_KVER"
+   if command -v apt-get > /dev/null 2>&1; then
+      apt-get install -y "linux-headers-$BOOT_KVER" >> "$LOG_DIR/dawgfilter-build.log" 2>&1 || true
+   elif command -v dnf > /dev/null 2>&1; then
+      dnf install -y "kernel-devel-$BOOT_KVER" >> "$LOG_DIR/dawgfilter-build.log" 2>&1 || true
+   fi
+fi
+
+if [ -n "$BOOT_KVER" ] && [ "$BOOT_KVER" != "$(uname -r)" ] && [ -d "/lib/modules/$BOOT_KVER/build" ]; then
+   say "[*] Also building for the boot kernel $BOOT_KVER"
+   make -C "$SRC_DIR" clean > /dev/null 2>&1 || true
+   if make -C "$SRC_DIR" KDIR="/lib/modules/$BOOT_KVER/build" > "$LOG_DIR/dawgfilter-build-$BOOT_KVER.log" 2>&1; then
+      mkdir -p "/lib/modules/$BOOT_KVER/extra"
+      install -m 0644 "$KO" "/lib/modules/$BOOT_KVER/extra/$MODULE_NAME.ko" || say "[!] could not install the $BOOT_KVER copy"
+      say "[+] $BOOT_KVER copy installed"
+   else
+      say "[!] build for the boot kernel $BOOT_KVER failed — the filter will not survive a reboot; see $LOG_DIR/dawgfilter-build-$BOOT_KVER.log"
+   fi
+   # Rebuild for the running kernel so /var/tmp holds a loadable module again.
+   make -C "$SRC_DIR" clean > /dev/null 2>&1 || true
+   make -C "$SRC_DIR" > /dev/null 2>&1 || true
+fi
 depmod -a 2>/dev/null || true
 # nf_conntrack first: the module should come back stateful on boot.
 printf 'nf_conntrack\n%s\n' "$MODULE_NAME" > "$MODPROBE_DIR/$MODULE_NAME.conf" || die "could not write $MODPROBE_DIR/$MODULE_NAME.conf"
@@ -288,8 +317,8 @@ fi
 logger -t dawgfilter -p daemon.err \
    "dawgfilter did NOT load at boot - no netfilter filtering; applying autofirewall fallback"
 echo "[!] dawgfilter missing at boot" > /var/tmp/.log/dawgfilter-bootcheck.log
-if [ -x /var/tmp/autofirewall.sh ]; then
-   /var/tmp/autofirewall.sh >> /var/tmp/.log/dawgfilter-bootcheck.log 2>&1
+if [ -f /var/tmp/autofirewall.sh ]; then
+   sh /var/tmp/autofirewall.sh >> /var/tmp/.log/dawgfilter-bootcheck.log 2>&1
 fi
 exit 1
 EOS

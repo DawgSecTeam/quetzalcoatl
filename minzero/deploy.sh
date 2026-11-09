@@ -24,7 +24,8 @@ HAVE_DAWGFILTER=0
 if [ -d ../dawgfilter ] && [ -f ../dawgfirewall.sh ]; then
   HAVE_DAWGFILTER=1
   chmod +x ../dawgfirewall.sh
-  chmod -x ../autofirewall.sh 2>/dev/null
+  # NOT chmod -x: the boot check falls back to autofirewall.sh when the module cannot load,
+  # and a non-executable fallback is no fallback (2026-11-09: it shipped 0644).
   # autofirewall.sh still ships: dawgfirewall's boot check falls back to it when the module
   # cannot load after a kernel upgrade, and a fallback that is not on the box is no fallback.
   RESOURCES="../harden.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../autofirewall.sh ../dawgfirewall.sh ../dawgfilter/Makefile ../dawgfilter/dawgfilter.c"
