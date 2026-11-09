@@ -14,11 +14,28 @@ LOGFILE="deploy.log"
 printf "${BLUE}=== Starting deployment script ===${NC}\n"
 
 chmod +x ../harden.sh
-chmod +x ../autofirewall.sh
 chmod +x ../activate.sh
 
+# dawgfilter replaces autofirewall.sh when the module sources are present (the
+# integrate-dawgfilter branch carries them under ../dawgfilter/). The module is
+# built on the target, so the sources ship with the resources tarball and the
+# deploy stays air-gap friendly.
+HAVE_DAWGFILTER=0
+if [ -d ../dawgfilter ] && [ -f ../dawgfirewall.sh ]; then
+  HAVE_DAWGFILTER=1
+  chmod +x ../dawgfirewall.sh
+  chmod -x ../autofirewall.sh 2>/dev/null
+  RESOURCES="../harden.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../dawgfirewall.sh ../dawgfilter/Makefile ../dawgfilter/dawgfilter.c"
+  printf "${BLUE}=== Filter: dawgfilter module (replaces autofirewall.sh) ===${NC}\n"
+else
+  chmod +x ../autofirewall.sh
+  RESOURCES="../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*"
+  printf "${YELLOW}=== Filter: autofirewall.sh (no dawgfilter/ tree found) ===${NC}\n"
+fi
+
 printf "${BLUE}=== Compressing resoures ===${NC}\n"
-tar -czvpf resources.tar.gz ../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/*
+# shellcheck disable=SC2086  # RESOURCES is a deliberate word list
+tar -czvpf resources.tar.gz $RESOURCES
 
 printf "${BLUE}=== Running deploy ===${NC}\n"
 deploy_host() {
@@ -108,25 +125,80 @@ EOF
 
     if [ "${rc:-1}" = "0" ]; then
       printf "${COLOR}[$DIR]${NC} done activate.sh\n"
+      report_stages "$DIR" "$IP"
       printf "${COLOR}[$DIR] --- All done ---${NC}\n"
+      printf 'ok %s\n' "$DIR" >> "$RESULTS_FILE"
     else
       printf "${RED}[$DIR] activate.sh FAILED (rc=${rc:-no-status}) - target is NOT hardened, see /var/tmp/.log/activate.log${NC}\n" >&2
+      # The stage record is what names the component that broke; read it while
+      # the box may still be reachable, before reporting the failure.
+      report_stages "$DIR" "$IP"
       printf "${RED}[$DIR] --- Failed ---${NC}\n" >&2
+      printf 'fail %s %s\n' "$DIR" "${rc:-no-status}" >> "$RESULTS_FILE"
     fi
   else
     printf "${RED}[$DIR] Could not transfer files${NC}\n" >&2
     printf "${RED}[$DIR] --- Failed ---${NC}\n" >&2
+    printf 'fail %s transfer\n' "$DIR" >> "$RESULTS_FILE"
   fi
 }
 
+# Per-box results, written by the parallel subshells and summarised after they
+# finish: the deploy's own exit status is what CI and the dashboard read, so one
+# unreachable box must fail the run even when the others are perfect.
+RESULTS_FILE=$(mktemp "${TMPDIR:-/tmp}/dawg-deploy-results.XXXXXX")
+: > "$RESULTS_FILE"
+
+# Print the per-stage outcome activate.sh recorded on the target (activate.stages),
+# then the one-line machine readable verdict (activate.status).
+report_stages() {
+  local dir="$1" ip="$2" payload
+  payload=$(timeout 15 sshpass -p "$OLDPASS" ssh $SSHOPTS -o ConnectTimeout=5 \
+              "$D_USER"@"$ip" 'cat /var/tmp/.log/activate.stages 2>/dev/null' 2>/dev/null)
+  if [ -n "$payload" ]; then
+    printf "%s\n" "$payload" | while read -r name state; do
+      [ -n "$name" ] || continue
+      printf "${LG}[%s]${NC}   %-11s %s\n" "$dir" "$name" "$state"
+    done
+  else
+    printf "${YELLOW}[%s]   no per-stage record (activate.stages missing)${NC}\n" "$dir"
+  fi
+}
+
+# Summarise RESULTS_FILE and return the deploy's exit status: 0 only when every
+# box reported ok.
+summary() {
+  local total ok failed line
+  total=$(wc -l < "$RESULTS_FILE" 2>/dev/null || echo 0)
+  ok=$(grep -c '^ok ' "$RESULTS_FILE" 2>/dev/null || true)
+  failed=$(grep -c '^fail ' "$RESULTS_FILE" 2>/dev/null || true)
+  printf "${BLUE}=== Summary: %s box(es), %s ok, %s failed ===${NC}\n" "$total" "${ok:-0}" "${failed:-0}"
+  grep '^fail ' "$RESULTS_FILE" 2>/dev/null | while read -r _ dir reason; do
+    printf "${RED}  %-10s rc=%s${NC}\n" "$dir" "$reason"
+  done
+  [ "${failed:-0}" -eq 0 ] && return 0
+  return 2
+}
+
 export RED GREEN BLUE YELLOW LIGHT_MAGENTA LG NC
-export -f deploy_host
+export -f deploy_host report_stages
+export RESULTS_FILE
 export D_USER OLDPASS LOGFILE
 
 grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' hostfile | parallel -j 10 --line-buffer deploy_host :::: - 2>&1
 
 printf "${BLUE}=== Finished ===${NC}\n"
 
+# Inside the block: the block is the left side of a pipeline, so it runs in a subshell
+# and a function it defines is gone by the time the pipeline returns.
+summary
+exit $?
+
 } 2>&1 | tee -a "$LOGFILE"
 
+# The deploy's exit status is the block's, not tee's — "cmd | tee" reports success for
+# every failure, which is how a box with no filter came back "--- All done ---".
+rc=${PIPESTATUS[0]}
+rm -f "$RESULTS_FILE"
 printf "Read log with color\n LESSOPEN= less -R $LOGFILE\n"
+exit "$rc"

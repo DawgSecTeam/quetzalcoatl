@@ -1,0 +1,112 @@
+name: dawgfilter build
+
+# The module is built on the target at deploy time, so a compile error is only
+# discovered while a competition box is being hardened — exactly how two module
+# revisions failed in the field (a non-existent kernel include path, then an
+# invented enum value). Both would have been caught in seconds here.
+#
+# Each distro this repo hardens is built against its own kernel headers, through
+# `docker run` rather than a container job so musl images do not have to host the
+# runner's node.
+
+on:
+  push:
+    paths:
+      - 'dawgfilter/**'
+      - 'dawgfirewall.sh'
+      - '.github/workflows/dawgfilter-build.yml'
+  pull_request:
+    paths:
+      - 'dawgfilter/**'
+      - 'dawgfirewall.sh'
+      - '.github/workflows/dawgfilter-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-24.04
+            image: ubuntu:24.04
+            install: apt-get update -qq && apt-get install -y --no-install-recommends build-essential linux-headers-generic kmod
+            headers: /usr/src/linux-headers-*
+          - name: ubuntu-22.04
+            image: ubuntu:22.04
+            install: apt-get update -qq && apt-get install -y --no-install-recommends build-essential linux-headers-generic kmod
+            headers: /usr/src/linux-headers-*
+          - name: debian-trixie
+            image: debian:trixie
+            install: apt-get update -qq && apt-get install -y --no-install-recommends build-essential linux-headers-amd64 kmod
+            headers: /usr/src/linux-headers-*
+          - name: debian-bookworm
+            image: debian:bookworm
+            install: apt-get update -qq && apt-get install -y --no-install-recommends build-essential linux-headers-amd64 kmod
+            headers: /usr/src/linux-headers-*
+          - name: fedora
+            image: fedora:latest
+            install: dnf install -y gcc make kernel-devel kmod
+            headers: /usr/src/kernels/*
+          - name: alpine
+            image: alpine:latest
+            install: apk add --no-cache build-base linux-headers kmod
+            headers: /usr/src/linux-headers-*
+    steps:
+      - uses: actions/checkout@v4
+
+      # dawgfirewall.sh generates config.h on the target from port-sources; the
+      # vendored one is a sample, so CI pins its own and the deploy path's
+      # generator is covered by the shell lint job below.
+      - name: Pin a known port list
+        run: |
+          cat > dawgfilter/config.h <<'EOF'
+          /* CI: fixed port list, mirrors a web01 port-sources file. */
+          static const int IN_PORTS_TCP[] = {22, 80};
+          static const int OUT_PORTS_TCP[] = {53, 80, 443};
+          static const int IN_PORTS_UDP[] = {22, 80};
+          static const int OUT_PORTS_UDP[] = {53, 80, 443};
+          static unsigned int DEFAULT_RULE = NF_DROP;
+          EOF
+          cat dawgfilter/config.h
+
+      - name: Build against ${{ matrix.name }} headers
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" -w /src \
+            ${{ matrix.image }} \
+            sh -c 'set -e
+              ${{ matrix.install }}
+              KDIR=$(ls -d ${{ matrix.headers }} 2>/dev/null | head -1)
+              echo "KDIR=$KDIR"
+              test -d "$KDIR" || { echo "no kernel headers found under ${{ matrix.headers }}"; exit 1; }
+              make -C dawgfilter KDIR="$KDIR" -j4'
+
+      - name: Prove the module carries both hooks
+        run: |
+          test -f dawgfilter/dawgfilter.ko || { echo "::error::no dawgfilter.ko produced"; exit 1; }
+          ls -l dawgfilter/dawgfilter.ko
+          # A module that builds but registers no hook filters nothing; the symbol
+          # table is the cheapest proof that both hook functions survived linking.
+          nm dawgfilter/dawgfilter.ko | grep -q 'hook_in' || { echo "::error::hook_in missing from module"; exit 1; }
+          nm dawgfilter/dawgfilter.ko | grep -q 'hook_out' || { echo "::error::hook_out missing from module"; exit 1; }
+          grep -q 'nf_conntrack' dawgfilter/dawgfilter.ko && echo "conntrack reference present" || echo "no conntrack reference (stateless build)"
+
+  lint-shell:
+    name: lint the firewall scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          # activate.sh and dawgfirewall.sh run under /bin/sh on the targets,
+          # deploy.sh is bash. Errors fail the job; style notes do not.
+          shellcheck -S error -s sh dawgfirewall.sh activate.sh
+          shellcheck -S error -s bash minzero/deploy.sh

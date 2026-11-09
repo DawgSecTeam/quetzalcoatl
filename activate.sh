@@ -16,7 +16,15 @@ cd /var/tmp
 # activate.sh records what happened here; the file stays world readable because
 # /var/tmp/.log is created 0777 by the deploy user.
 STATUS_FILE=/var/tmp/.log/activate.status
+STAGES_FILE=/var/tmp/.log/activate.stages
 FAIL_REASON=""
+STAGE="startup"
+# One line per stage so the deploy can print a per-box matrix instead of a single
+# "All done". Written eagerly: if the box locks up mid-stage the last line still
+# tells the operator which stage it died in.
+mark() {
+   printf '%s %s\n' "$1" "${2:-ok}" >> "$STAGES_FILE" 2>/dev/null
+}
 finish() {
    if [ -z "$FAIL_REASON" ]; then
       printf 'ok\n' > "$STATUS_FILE"
@@ -27,6 +35,7 @@ finish() {
 die() {
    printf "FATAL(%s): %s\n" "$1" "$2"
    FAIL_REASON="$1 $2"
+   mark "${STAGE:-unknown}" "FAIL(rc=$1)"
    finish
    exit "$1"
 }
@@ -39,11 +48,14 @@ die() {
 mkdir -p /var/tmp/.log
 chmod 777 /var/tmp/.log
 printf 'pending\n' > "$STATUS_FILE"
+: > "$STAGES_FILE"
+chmod 666 "$STAGES_FILE" 2>/dev/null
 
 ############################
 # Install critical software
 ############################
 
+STAGE=iptables
 if ! command -v iptables > /dev/null; then
    printf "iptables missing, installing...\n"
 
@@ -74,25 +86,41 @@ if ! command -v iptables > /dev/null; then
       die 10 "iptables could not be installed - no firewall can be applied"
    fi
 fi
+mark iptables
 
 ############################
 # setting up lax firewall
 ############################
+STAGE=laxfirewall
 printf "Starting autofirewall.sh with package manager\n"
-/var/tmp/autofirewall.sh -d 2>&1 | tee /var/tmp/.log/autofirewall.log
+# -d installs the package; the result is recorded but not fatal, because the real
+# filter is applied (and checked) below. No "| tee": this script runs under dash on
+# Debian/Ubuntu, where PIPESTATUS does not exist and a pipeline reports tee's status.
+if /var/tmp/autofirewall.sh -d > /var/tmp/.log/autofirewall.log 2>&1; then
+   mark laxfirewall ok
+else
+   mark laxfirewall warn
+fi
+tail -n 3 /var/tmp/.log/autofirewall.log
 printf "Finished autofirewall.sh with package manager\n"
 
 ############################
 # Taking initial backup
 ############################
+STAGE=backup
 printf "==> Deploying backup\n"
 printf "IMPORTANT NOTE -- OUTPUT OF ps, ss, AND cp WILL BE DIFFERENT AFTER BUSYBOX IS CONFIGURED\n"
 chmod +x backup.sh
-./backup.sh backup initial
+if ./backup.sh backup initial; then
+   mark backup ok
+else
+   mark backup "warn(rc=$?)"
+fi
 
 ############################
 # Setting up auditd
 ############################
+STAGE=auditd
 printf "==> Deploying auditd\n"
 printf "====> Installing auditd\n"
 if command -v auditctl > /dev/null 2>&1; then
@@ -152,16 +180,19 @@ fi
 ############################
 # Deploying watchdawg
 ############################
+STAGE=watchdawg
 printf "==> Deploying watchdawg\n"
 chmod 700 watchdawg.sh
 mkdir -p /etc/kernel
 mv /var/tmp/watchdawg.sh /etc/kernel/watchdawg
 mv /var/tmp/watchdawg-sources /etc/kernel/sources
 nohup /etc/kernel/watchdawg /etc/kernel/init-state /etc/kernel/sources > /etc/kernel/out 2>&1 &
+mark watchdawg ok
 
 ############################
 # Setting up busybox
 ############################
+STAGE=busybox
 printf "==> Deploying busybox\n"
 #curl -k -L -O https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox
 chmod +x /var/tmp/binaries/busybox
@@ -181,27 +212,46 @@ printf "==> Replacing /bin/false\n"
 ln -sf /opt/busybox/false /bin/false
 
 printf "[DONE] Log out if using ssh and log back in to activate busybox\n"
+mark busybox ok
 
 
 ############################
-# Running autofirewall.sh
+# Running the filter (dawgfilter module, or autofirewall.sh)
 ############################
 
-printf "Starting autofirewall.sh\n"
-# "cmd | tee log" hides the exit status of cmd (tee always wins): that is how a
-# box with no iptables at all reported a finished firewall.
-/var/tmp/autofirewall.sh > /var/tmp/.log/autofirewall.log 2>&1
-rc=$?
-tail -n 3 /var/tmp/.log/autofirewall.log
-if [ "$rc" -ne 0 ]; then
-   die 13 "autofirewall.sh failed with rc=$rc - firewall state is unknown"
+# dawgfirewall.sh is staged by deploy.sh when the target has a dawgfilter/ tree.
+# It replaces autofirewall.sh: the port lists come from /var/tmp/port-sources and
+# the filtering happens in a netfilter module instead of iptables rules.
+STAGE=firewall
+if [ -x /var/tmp/dawgfirewall.sh ]; then
+   printf "Starting dawgfirewall.sh\n"
+   # "cmd | tee log" hides the exit status of cmd (tee always wins): that is how a
+   # box with no iptables at all reported a finished firewall.
+   /var/tmp/dawgfirewall.sh > /var/tmp/.log/dawgfirewall.log 2>&1
+   rc=$?
+   tail -n 6 /var/tmp/.log/dawgfirewall.log
+   if [ "$rc" -ne 0 ]; then
+      die 13 "dawgfirewall.sh failed with rc=$rc - firewall state is unknown"
+   fi
+   mark firewall "dawgfilter"
+   printf "Finished dawgfirewall.sh\n"
+else
+   printf "Starting autofirewall.sh\n"
+   /var/tmp/autofirewall.sh > /var/tmp/.log/autofirewall.log 2>&1
+   rc=$?
+   tail -n 3 /var/tmp/.log/autofirewall.log
+   if [ "$rc" -ne 0 ]; then
+      die 13 "autofirewall.sh failed with rc=$rc - firewall state is unknown"
+   fi
+   mark firewall "autofirewall"
+   printf "Finished autofirewall.sh\n"
 fi
-printf "Finished autofirewall.sh\n"
 
 ############################
 # Running harden.sh
 ############################
 
+STAGE=harden
 printf "Starting harden.sh\n"
 /var/tmp/harden.sh "$1" > /var/tmp/.log/harden.log 2>&1
 rc=$?
@@ -209,7 +259,15 @@ tail -n 3 /var/tmp/.log/harden.log
 if [ "$rc" -ne 0 ]; then
    die 14 "harden.sh failed with rc=$rc - accounts are not hardened, see /var/tmp/.log/harden.log"
 fi
+mark harden ok
 printf "Finished harden.sh\n"
+
+# The firewall's suicide switch is only disarmed once everything after it has
+# run: reaching this line over a live ssh session is the proof that the new
+# filter did not cut the box off.
+if [ -x /var/tmp/dawgfirewall.sh ]; then
+   /var/tmp/dawgfirewall.sh --confirm || true
+fi
 
 printf "Finished activation script\n"
 printf "Check out the baselining scripts standard.sh and specific.sh\n"
