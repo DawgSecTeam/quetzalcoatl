@@ -13,11 +13,12 @@
 #     runs under) dies before the module is proven to pass a fresh SSH
 #     connection, the switch rmmods it again, so a bad build cannot brick a box
 #     and, worse, cannot survive the reboot that would make the lockout permanent
-#   * self-tests after insmod: connect to this box's own port 22 through the new
-#     hooks; if that fails the module is unloaded immediately
+#   * arms the switch BEFORE insmod and disarms it only through --confirm, which
+#     activate.sh runs after everything that follows the firewall has worked over
+#     the live ssh session
 #
 # Modes
-#   dawgfirewall.sh            build, load, self-test, persist
+#   dawgfirewall.sh            build, load, persist (the caller confirms)
 #   dawgfirewall.sh --confirm  cancel the suicide switch (idempotent; called
 #                              after the deploy proved the box is still reachable)
 #   dawgfirewall.sh --unload   remove the module and its boot-time load
@@ -84,6 +85,19 @@ install_build_deps() {
    if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
       say "[!] /lib/modules/$(uname -r)/build is missing after installing headers"
       return 1
+   fi
+
+   # A kernel upgrade already staged for the next boot is the trap that silently removes
+   # the filter after a reboot: the module is built for $(uname -r), the box boots the
+   # newer one (2026-11-09: built for 6.12.107, rebooted into 6.12.116, no filter).
+   newest=$(ls /lib/modules 2>/dev/null | grep -v "$(uname -r)" | sort -V | tail -1)
+   if [ -n "$newest" ]; then
+      case "$(printf '%s\n%s\n' "$(uname -r)" "$newest" | sort -V | tail -1)" in
+         "$newest")
+            say "[!] a newer kernel ($newest) is installed and will boot next: the module"
+            say "    built now will NOT load after that reboot. Reboot first, then re-run"
+            say "    this script, or pin the kernel. Installing the boot check regardless." ;;
+      esac
    fi
 }
 
@@ -168,33 +182,6 @@ confirm_switch() {
 }
 
 # --------------------------------------------------
-# Self-test: does a fresh inbound connection still work?
-# --------------------------------------------------
-
-self_test() {
-   ip=$(hostname -I 2>/dev/null | awk '{print $1}')
-   [ -n "${ip:-}" ] || ip=$(ip -4 addr show scope global 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1)
-   [ -n "${ip:-}" ] || { say "[!] cannot determine this box's IP for the self-test"; return 1; }
-
-   try() { timeout 5 "$@" > /dev/null 2>&1; }
-
-   if command -v nc > /dev/null 2>&1; then
-      try nc -z "$ip" "$SSH_PORT" && return 0
-   fi
-   if command -v ncat > /dev/null 2>&1; then
-      try ncat -z -w 3 "$ip" "$SSH_PORT" && return 0
-   fi
-   if command -v python3 > /dev/null 2>&1; then
-      try python3 -c "import socket,sys; s=socket.create_connection(('$ip', $SSH_PORT), 4); s.close()" && return 0
-   fi
-   if [ -x /bin/bash ]; then
-      try /bin/bash -c "exec 3<>/dev/tcp/$ip/$SSH_PORT" && return 0
-   fi
-   say "[!] self-test could not prove that inbound $SSH_PORT still works (no prober available)"
-   return 1
-}
-
-# --------------------------------------------------
 # Modes
 # --------------------------------------------------
 
@@ -262,12 +249,12 @@ if ! lsmod | grep -q "^$MODULE_NAME"; then
    die "module not in lsmod after insmod"
 fi
 
-if ! self_test; then
-   say "[!] self-test failed: inbound $SSH_PORT did not come back through the new hooks"
-   rmmod "$MODULE_NAME" 2>/dev/null
-   rm -f "$ARM_FILE"
-   die "module unloaded again - a box with a broken filter must not stay reachable-only-by-console"
-fi
+# No box-side reachability probe here: the only flow that would prove inbound works is a
+# connection from ANOTHER host, and this script cannot make one. A box connecting to its own
+# SSH port is not a valid test either — the outbound list does not allow destination 22, so
+# the filter correctly drops it (2026-11-09: that false negative unloaded a working module on
+# both boxes). The proof is the caller's: activate.sh keeps running over the same ssh session
+# and confirms at the end, and the switch unloads the module if it never gets there.
 
 # --------------------------------------------------
 # Persist across reboot
@@ -287,6 +274,44 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 EOF
 sysctl -q -p /etc/sysctl.d/99-dawgfilter-no-ipv6.conf 2>/dev/null || true
+
+# --------------------------------------------------
+# Boot check: never let a silent module load failure leave a box unfiltered
+# --------------------------------------------------
+install_boot_check() {
+   cat > /usr/local/sbin/dawgfilter-bootcheck <<'EOS'
+#!/bin/sh
+# Installed by dawgfirewall.sh. Runs at boot AFTER modules-load.d has done its work.
+if lsmod | grep -q '^dawgfilter'; then
+   exit 0
+fi
+logger -t dawgfilter -p daemon.err \
+   "dawgfilter did NOT load at boot - no netfilter filtering; applying autofirewall fallback"
+echo "[!] dawgfilter missing at boot" > /var/tmp/.log/dawgfilter-bootcheck.log
+if [ -x /var/tmp/autofirewall.sh ]; then
+   /var/tmp/autofirewall.sh >> /var/tmp/.log/dawgfilter-bootcheck.log 2>&1
+fi
+exit 1
+EOS
+   chmod 0755 /usr/local/sbin/dawgfilter-bootcheck
+   cat > /etc/systemd/system/dawgfilter-bootcheck.service <<'EOS'
+[Unit]
+Description=dawgfilter boot check (fall back to iptables when the module did not load)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dawgfilter-bootcheck
+
+[Install]
+WantedBy=multi-user.target
+EOS
+   systemctl daemon-reload 2>/dev/null || true
+   systemctl enable dawgfilter-bootcheck.service > /dev/null 2>&1 || true
+   say "[+] Boot check installed (dawgfilter-bootcheck.service)"
+}
+
+install_boot_check
 
 confirm_switch
 say "[+] $MODULE_NAME active: in {$IN_PORTS} out {$OUT_PORTS}, default DROP (ICMP included)"

@@ -65,7 +65,7 @@ static bool in_list(const int *list, int len, int port)
 // inbound packet whose SOURCE port was in the outbound list, so `--source-port
 // 443` reached every port on the box).
 static bool looks_like_stateless_reply(int proto, int src_port, int dst_port,
-				       bool is_syn)
+				       bool bare_syn)
 {
 	if (dst_port < 32768)
 		return false;
@@ -75,8 +75,10 @@ static bool looks_like_stateless_reply(int proto, int src_port, int dst_port,
 			     : (int)(sizeof(OUT_PORTS_UDP) / sizeof(OUT_PORTS_UDP[0])),
 		     src_port))
 		return false;
-	// TCP: a listener's legitimate reply never carries SYN.
-	if (proto == IPPROTO_TCP && is_syn)
+	// TCP: reject a bare SYN (a new inbound connection), but accept a SYN-ACK — the
+	// reply to a connection this box opened carries SYN too, and rejecting every SYN
+	// killed all outbound TCP while DNS (UDP) kept working (2026-11-09 live test).
+	if (proto == IPPROTO_TCP && bare_syn)
 		return false;
 	return true;
 }
@@ -135,7 +137,7 @@ static unsigned int hook_in(void *priv, struct sk_buff *skb,
 	int src_port, dst_port, len_in;
 	const int *in_list_p;
 	bool tcp = iph->protocol == IPPROTO_TCP;
-	bool is_syn = false;
+	bool bare_syn = false;
 
 	// A tracked reply (conntrack available): always allowed back in.
 	if (ct_is_reply(skb))
@@ -148,7 +150,7 @@ static unsigned int hook_in(void *priv, struct sk_buff *skb,
 	if (tcp) {
 		src_port = ntohs(tcp_hdr(skb)->source);
 		dst_port = ntohs(tcp_hdr(skb)->dest);
-		is_syn = tcp_hdr(skb)->syn;
+		bare_syn = tcp_hdr(skb)->syn && !tcp_hdr(skb)->ack;
 		in_list_p = IN_PORTS_TCP;
 		len_in = sizeof(IN_PORTS_TCP) / sizeof(IN_PORTS_TCP[0]);
 	} else {
@@ -165,7 +167,7 @@ static unsigned int hook_in(void *priv, struct sk_buff *skb,
 	// Stateless fallback for replies to outbound sessions (see the comment on
 	// looks_like_stateless_reply). dst-port matching only: the source port
 	// never grants entry on its own.
-	if (looks_like_stateless_reply(iph->protocol, src_port, dst_port, is_syn))
+	if (looks_like_stateless_reply(iph->protocol, src_port, dst_port, bare_syn))
 		return NF_ACCEPT;
 
 	return DEFAULT_RULE;

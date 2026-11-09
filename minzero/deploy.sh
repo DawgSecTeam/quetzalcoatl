@@ -25,7 +25,9 @@ if [ -d ../dawgfilter ] && [ -f ../dawgfirewall.sh ]; then
   HAVE_DAWGFILTER=1
   chmod +x ../dawgfirewall.sh
   chmod -x ../autofirewall.sh 2>/dev/null
-  RESOURCES="../harden.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../dawgfirewall.sh ../dawgfilter/Makefile ../dawgfilter/dawgfilter.c"
+  # autofirewall.sh still ships: dawgfirewall's boot check falls back to it when the module
+  # cannot load after a kernel upgrade, and a fallback that is not on the box is no fallback.
+  RESOURCES="../harden.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../autofirewall.sh ../dawgfirewall.sh ../dawgfilter/Makefile ../dawgfilter/dawgfilter.c"
   printf "${BLUE}=== Filter: dawgfilter module (replaces autofirewall.sh) ===${NC}\n"
 else
   chmod +x ../autofirewall.sh
@@ -125,14 +127,14 @@ EOF
 
     if [ "${rc:-1}" = "0" ]; then
       printf "${COLOR}[$DIR]${NC} done activate.sh\n"
-      report_stages "$DIR" "$IP"
+      report_stages "$DIR" "$out"
       printf "${COLOR}[$DIR] --- All done ---${NC}\n"
       printf 'ok %s\n' "$DIR" >> "$RESULTS_FILE"
     else
       printf "${RED}[$DIR] activate.sh FAILED (rc=${rc:-no-status}) - target is NOT hardened, see /var/tmp/.log/activate.log${NC}\n" >&2
       # The stage record is what names the component that broke; read it while
       # the box may still be reachable, before reporting the failure.
-      report_stages "$DIR" "$IP"
+      report_stages "$DIR" "$out"
       printf "${RED}[$DIR] --- Failed ---${NC}\n" >&2
       printf 'fail %s %s\n' "$DIR" "${rc:-no-status}" >> "$RESULTS_FILE"
     fi
@@ -149,19 +151,19 @@ EOF
 RESULTS_FILE=$(mktemp "${TMPDIR:-/tmp}/dawg-deploy-results.XXXXXX")
 : > "$RESULTS_FILE"
 
-# Print the per-stage outcome activate.sh recorded on the target (activate.stages),
-# then the one-line machine readable verdict (activate.status).
+# Print the per-stage outcome activate.sh emitted on its stdout ("[stage] name state").
+# It comes from the activation output already captured, not a second ssh: after harden the
+# deploy account's shell is rbash, which cannot read /var/tmp/.log/activate.stages.
 report_stages() {
-  local dir="$1" ip="$2" payload
-  payload=$(timeout 15 sshpass -p "$OLDPASS" ssh $SSHOPTS -o ConnectTimeout=5 \
-              "$D_USER"@"$ip" 'cat /var/tmp/.log/activate.stages 2>/dev/null' 2>/dev/null)
-  if [ -n "$payload" ]; then
-    printf "%s\n" "$payload" | while read -r name state; do
+  local dir="$1" payload="$2" lines
+  lines=$(printf '%s\n' "$payload" | tr -d '\r' | sed -n 's/^\[stage\] //p')
+  if [ -n "$lines" ]; then
+    printf '%s\n' "$lines" | while read -r name state; do
       [ -n "$name" ] || continue
       printf "${LG}[%s]${NC}   %-11s %s\n" "$dir" "$name" "$state"
     done
   else
-    printf "${YELLOW}[%s]   no per-stage record (activate.stages missing)${NC}\n" "$dir"
+    printf "${YELLOW}[%s]   no per-stage record in the activation output${NC}\n" "$dir"
   fi
 }
 

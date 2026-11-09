@@ -25,7 +25,17 @@ STAGE="startup"
 mark() {
    printf '%s %s\n' "$1" "${2:-ok}" >> "$STAGES_FILE" 2>/dev/null
 }
+# Emitted to stdout so deploy.sh can print the matrix from the activation output it
+# already captured: after harden.sh the deploy account's shell is rbash, so a second ssh
+# to read /var/tmp/.log/activate.stages fails and the matrix came back empty (2026-11-09).
+print_stages() {
+   printf -- "--- components ---\n"
+   while read -r stage state; do
+      [ -n "$stage" ] && printf "[stage] %s %s\n" "$stage" "$state"
+   done < "$STAGES_FILE" 2>/dev/null
+}
 finish() {
+   print_stages
    if [ -z "$FAIL_REASON" ]; then
       printf 'ok\n' > "$STATUS_FILE"
    else
