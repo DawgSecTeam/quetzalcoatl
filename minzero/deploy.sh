@@ -47,6 +47,21 @@ EOF
   # Copy over files
   sshpass -p "$OLDPASS" scp -rpo StrictHostKeyChecking=no "$PASSFILE" resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$D_USER@$IP:/var/tmp/"
 
+  # Check if tar exists
+  if command -v tar &> /dev/null; then
+    printf "tar found\n"
+  else
+    if command -v dnf &> /dev/null; then
+      dnf install tar -y
+    elif command -v apt &> /dev/null; then
+      apt install -y tar
+    elif command -v apk &> /dev/null; then
+      apk add -q tar
+    elif command -v pacman &> /dev/null; then
+      pacman -S --noconfirm tar
+    fi
+  fi
+
   if [ $? -eq 0 ]; then
     printf "${COLOR}[$DIR]${NC} Files transferred successfully.\n"
 

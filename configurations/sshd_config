@@ -7,7 +7,7 @@ PubkeyAuthentication no        # ssh keys
 IgnoreRhosts yes
 UsePAM yes
 X11Forwarding no
-UsePrivilegeSeparation sandbox # (if that breaks, change sandbox to yes)
+#UsePrivilegeSeparation sandbox # (if that breaks, change sandbox to yes)
 RSAAuthentication no
 
 ClientAliveInterval 300

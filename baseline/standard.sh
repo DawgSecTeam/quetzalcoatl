@@ -55,6 +55,11 @@ printf "$LD_PRELOAD\n"
 
 interact
 
+printf "${BLUE}Checking for preloaded systemd services${NC}\n"
+grep -rlis 'LD_PRELOAD' /etc/systemd /usr/lib/systemd /lib/systemd
+
+interact
+
 printf "${BLUE}Showing PATH variable (check for suspicious dirs)${NC}\n"
 printf "$PATH\n"
 
@@ -193,7 +198,7 @@ elif command -v apk > /dev/null 2>&1; then
    apk verify
 elif command -v rpm > /dev/null 2>&1; then
    echo
-   #rpm -Va | grep -v missing
+   rpm -Va | grep -v missing
 fi
 
 interact

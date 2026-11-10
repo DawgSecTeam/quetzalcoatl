@@ -9,3 +9,8 @@
 /etc/sudoers
 /etc/rc.local
 /etc/nsswitch.conf
+/etc/systemd/system
+/root/.ssh
+/etc/modules-load.d
+/etc/modprobe.d
+/etc/sudoers.d

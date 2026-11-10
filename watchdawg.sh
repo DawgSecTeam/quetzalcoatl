@@ -67,6 +67,8 @@ while true; do
          echo "CHANGE on file $line at $(date)" >> "$LOG_DIR/wd.log"
          diff "$line" "$BACKUP_DIR$line" >> "$LOG_DIR/wd.log"
          cp -p "$line" "$BACKUP_DIR$line"
+         wall "============" >> "$LOG_DIR/wd.log"
+         wall "Woof! File change detected on file $line"
       fi
    done < "$WATCHLIST"
 
