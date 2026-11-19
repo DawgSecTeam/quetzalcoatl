@@ -18,6 +18,20 @@ mkdir -p /var/tmp/.log
 chmod 777 /var/tmp/.log
 
 ############################
+# ssh config
+############################
+mv /var/tmp/configurations/sshd_config /etc/ssh/sshd_config
+if command -v dnf > /dev/null; then
+  systemctl reload sshd
+elif command -v apt > /dev/null; then
+  systemctl reload ssh
+elif command -v apk > /dev/null; then
+  rc-service sshd reload
+elif command -v pacman > /dev/null; then
+  systemctl reload sshd
+fi
+
+############################
 # Install critical software
 ############################
 

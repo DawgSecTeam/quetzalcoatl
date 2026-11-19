@@ -6,8 +6,11 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-IN=$(head -n1 /var/tmp/port-sources)
-OUT=$(tail -n1 /var/tmp/port-sources)
+IN_TCP=$(sed '1q;d' /var/tmp/port-sources)
+OUT_TCP=$(sed '2q;d' /var/tmp/port-sources)
+IN_UDP=$(sed '3q;d' /var/tmp/port-sources)
+OUT_UDP=$(sed '4q;d' /var/tmp/port-sources)
+LAN=$(sed '5q;d' /var/tmp/port-sources)
 download_ports=false
 nuke=false
 
@@ -104,9 +107,12 @@ iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 # --------------------------------------------------
 
 #INBOUND
-for port in $IN; do
+for port in $IN_TCP; do
   printf "[+] Allow inbound TCP port $port\n"
   iptables -A INPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
+done
+
+for port in $IN_UDP; do
   printf "[+] Allow inbound UDP port $port\n"
   iptables -A INPUT -p udp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
 done
@@ -115,9 +121,12 @@ printf "[+] Deny outbound ICMP\n"
 iptables -A OUTPUT -p icmp -j DROP
 
 #OUTBOUND
-for port in $OUT; do
+for port in $OUT_TCP; do
   printf "[+] Allow outbound TCP port $port\n"
   iptables -A OUTPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
+done
+
+for port in $OUT_UDP; do
   printf "[+] Allow outbound UDP port $port\n"
   iptables -A OUTPUT -p udp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT
 done
@@ -158,8 +167,8 @@ iptables -A INPUT -m conntrack --ctstate INVALID -j DROP
 iptables -A OUTPUT -m conntrack --ctstate INVALID -j DROP
 
 # Allow vertical
-iptables -A INPUT -s 192.168.111.0/24 -j ACCEPT
-iptables -A OUTPUT -s 192.168.111.0/24 -j ACCEPT
+iptables -A INPUT -s "$LAN" -j ACCEPT
+iptables -A OUTPUT -s "$LAN" -j ACCEPT
 
 #v6
 sysctl -w net.ipv6.conf.all.disable_ipv6=1

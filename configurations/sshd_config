@@ -1,14 +1,24 @@
-PermitRootLogin no # this one is really important!
+# Access & Authentication
+PermitRootLogin no
 PasswordAuthentication yes
-IgnoreUserKnownHosts yes
-IgnoreRhosts yes
+PubkeyAuthentication no
 PermitEmptyPasswords no
-PubkeyAuthentication no        # ssh keys
-IgnoreRhosts yes
+MaxAuthTries 3
 UsePAM yes
-X11Forwarding no
-#UsePrivilegeSeparation sandbox # (if that breaks, change sandbox to yes)
-RSAAuthentication no
 
-ClientAliveInterval 300
-ClientAliveCountMax 0
+# Block legacy rhosts/known_hosts bypasses
+IgnoreRhosts yes
+IgnoreUserKnownHosts yes
+
+# Prevent Red Team SSH pivoting & tunneling
+X11Forwarding no
+AllowTcpForwarding no
+GatewayPorts no
+PermitTunnel no
+
+# Session timeouts (3 min idle, resilient to packet loss)
+ClientAliveInterval 60
+ClientAliveCountMax 3
+
+# Cross-distro SFTP/SCP support
+Subsystem sftp internal-sftp
