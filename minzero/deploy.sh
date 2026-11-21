@@ -18,9 +18,13 @@ printf "${BLUE}=== Starting deployment script ===${NC}\n"
 chmod +x ../harden.sh
 chmod +x ../autofirewall.sh
 chmod +x ../activate.sh
+chmod +x ../trace.sh
 
 printf "${BLUE}=== Compressing resoures ===${NC}\n"
-tar -czvpf resources.tar.gz ../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../configurations/*
+tar -czvpf resources.tar.gz ../harden.sh ../autofirewall.sh ../activate.sh ../c2scanner.sh ../binaries/ ../backup.sh ../watchdawg.sh ../watchdawg-sources ../auditd-rules ../baseline/* ../configurations/* ../stage2fw/* ../trace.sh
+
+printf "${BLUE}=== CLICK TO DEPLOY ===${NC}\n"
+read ans
 
 printf "${BLUE}=== Running deploy ===${NC}\n"
 deploy_host() {
@@ -37,7 +41,13 @@ deploy_host() {
   HASH=$(echo "$line" | cut -d' ' -f5)
 
   # Stage 1
-  sshpass -p "asdf" ssh $D_USER@$IP "echo asdf | sudo -S sh -c \"echo sysadmin:$NEWPASS | sudo -S chpasswd\" "
+  HAS_SUDO=$(sshpass -p "$OLDPASS" ssh -o StrictHostKeyChecking=no "$D_USER"@"$IP" 'command -v sudo >/dev/null 2>&1 && echo yes || echo no')
+
+  if [ "$HAS_SUDO" = "yes" ]; then
+    sshpass -p "asdf" ssh -o StrictHostKeyChecking=no $D_USER@$IP "echo asdf | sudo -S sh -c \"echo sysadmin:$NEWPASS | sudo -S chpasswd\" "
+  else
+    sshpass -p "asdf" ssh -o StrictHostKeyChecking=no $D_USER@$IP "doas sh -c \"echo sysadmin:$NEWPASS | chpasswd\" "
+  fi
 
 
   PASSFILE="pass_$DIR"
@@ -55,7 +65,6 @@ EOF
   sshpass -p "$NEWPASS" scp -rpo StrictHostKeyChecking=no "$PASSFILE" resources.tar.gz "$AbsPath/$DIR/port-sources" "$AbsPath/$DIR" "$D_USER@$IP:/var/tmp/"
 
   # Run sudo/doas depending on presence of sudo
-  HAS_SUDO=$(sshpass -p "$NEWPASS" ssh -o StrictHostKeyChecking=no "$D_USER"@"$IP" 'command -v sudo >/dev/null 2>&1 && echo yes || echo no')
 
   if [ "$HAS_SUDO" = "yes" ]; then
 
@@ -92,8 +101,8 @@ EOF
     printf "${COLOR}[$DIR]${NC} starting activate.sh - includes autofirewall, backup, auditd, watchdawg, busybox, and harden deploys\n"
 
 
-      if [ "$HAS_SUDO" = "yes" ]; then
-      sshpass -p "$NEWPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/activate.sh '$HASH' 2>&1 | tee /var/tmp/.log/activate.log" < /dev/null \
+  if [ "$HAS_SUDO" = "yes" ]; then
+    sshpass -p "$NEWPASS" ssh "$D_USER"@"$IP" "SUDO_ASKPASS=/var/tmp/$PASSFILE sudo -A /var/tmp/activate.sh '$HASH' 2>&1 | tee /var/tmp/.log/activate.log" < /dev/null \
         2>&1 | sed "s/^/[$DIR] /" >> "$LOGFILE"
     else
       sshpass -p "$NEWPASS" ssh -tt -o StrictHostKeyChecking=no "$D_USER"@"$IP" "doas /var/tmp/activate.sh '$HASH' 2>&1 | tee /var/tmp/.log/activate.log" \

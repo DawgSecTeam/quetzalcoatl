@@ -73,6 +73,25 @@ chmod +x backup.sh
 ./backup.sh backup initial
 
 ############################
+# Setting up bpftrace
+############################
+if command -v bpftrace > /dev/null; then
+   printf "Already installed\n"
+else
+   if command -v dnf > /dev/null; then
+      dnf install bpftrace nohup -y
+   elif command -v apt > /dev/null; then
+      apt install bpftrace nohup -y
+   elif command -v apk > /dev/null; then
+      apk add bpftrace nohup
+   elif command -v pacman > /dev/null; then
+      pacman -S --noconfirm bpftrace nohup
+   fi
+fi
+chmod +x trace.sh
+./trace.sh
+
+############################
 # Setting up auditd
 ############################
 printf "==> Deploying auditd\n"
